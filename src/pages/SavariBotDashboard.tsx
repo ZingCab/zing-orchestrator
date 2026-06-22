@@ -25,7 +25,7 @@ import {
 } from "@/lib/savariBotMapping";
 import type { OutstationRoute, RouteDirection, TripToggleId } from "@/data/savariBotDummy";
 
-const DEFAULT_VENDOR_ID = import.meta.env.VITE_SAVARI_VENDOR_ID || "175236";
+const DEFAULT_VENDOR_ID = import.meta.env.VITE_SAVARI_VENDOR_ID || "262882";
 
 const TRIP_LABELS: { id: TripToggleId; title: string; hint: string }[] = [
   { id: "outstation_oneway", title: "Outstation — one way", hint: "City-to-city single direction trips" },
