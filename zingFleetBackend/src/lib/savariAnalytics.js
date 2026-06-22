@@ -26,14 +26,14 @@ async function upsertBooking(b) {
   const row = {
     booking_id: String(b.booking_id),
     car_type: b.car_type || null,
-    vendor_cost: vendorCost,
+    vendor_cost: Math.round(vendorCost),
     trip_type_name: TRIP_TYPE_MAP[b.trip_type_name] || "Other",
-    total_amt: totalAmt,
+    total_amt: Math.round(totalAmt),
     start_date: b.start_date || null,
     pick_city: b.pick_city || null,
     pick_loc: b.pick_loc || null,
     payment_status: b.payment_status || null,
-    savari_cut: savariCut,
+    savari_cut: Math.round(savariCut),
     savari_cut_pct: savariCutPct,
     updated_at: new Date().toISOString(),
   };
