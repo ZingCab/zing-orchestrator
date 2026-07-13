@@ -112,12 +112,13 @@ router.get("/dashboard", async (_req, res, next) => {
       matrix[car][trip] = (matrix[car][trip] || 0) + 1;
     }
 
-    // ── Honest monthly time series, keyed by created_at (feed date) ─────────
-    // created_at never lands in the future, so no phantom/partial future months.
-    // The in-progress month is flagged so the UI can mark it as incomplete.
+    // ── Monthly time series, keyed by TRIP date (start_date) — this is what an
+    // operator plans around. Months at/after the current one are flagged
+    // `partial` (still filling: current month in progress + future bookings
+    // trickling in) so the UI can render them lighter and never read as a drop.
     const monthlyMap = new Map();
     for (const r of rows) {
-      const ym = (r.created_at || "").slice(0, 7);
+      const ym = (r.start_date || r.created_at || "").slice(0, 7);
       if (!ym) continue;
       if (!monthlyMap.has(ym)) monthlyMap.set(ym, { trips: 0, earned: 0, byType: {} });
       const g = monthlyMap.get(ym);
@@ -133,7 +134,7 @@ router.get("/dashboard", async (_req, res, next) => {
         trips: g.trips,
         earned: Math.round(g.earned),
         byType: g.byType,
-        partial: ym === currentYm,
+        partial: ym >= currentYm,
       }));
 
     // Trip-type keys present, most common first — for stable chart series/legends.
