@@ -191,7 +191,7 @@ export default function SavariBotDashboard() {
             <div style={{ width: 112, height: 6, borderRadius: 9999, background: "var(--surface-table-header)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progressPct}%`, background: "var(--blue-600)", borderRadius: 9999, transition: "width 300ms ease-out" }} />
             </div>
-            <span className="mc-chip" style={{ background: running ? "var(--surface-success)" : "var(--surface-table-header)", color: running ? "var(--green-800)" : "var(--text-body-secondary)" }}>
+            <span className="mc-chip" style={{ background: running ? "var(--chip-success-bg)" : "var(--surface-table-header)", color: running ? "var(--chip-success-fg)" : "var(--text-body-secondary)" }}>
               <span style={{ width: 6, height: 6, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)" }} />
               {running ? "Running" : "Stopped"}
             </span>
@@ -210,7 +210,7 @@ export default function SavariBotDashboard() {
         <div className="mc-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <h2 style={{ font: "700 15px var(--font-heading)" }}>Trip type toggles</h2>
-            <span className="mc-chip" style={{ background: "var(--surface-success)", color: "var(--green-800)" }}>{activeCount} active</span>
+            <span className="mc-chip" style={{ background: "var(--chip-success-bg)", color: "var(--chip-success-fg)" }}>{activeCount} active</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {TRIP_LABELS.map(({ id, title, hint }) => (
@@ -239,7 +239,7 @@ export default function SavariBotDashboard() {
                 <DirBtn active={direction === "kolkata_out"} onClick={() => setDirection("kolkata_out")}>→ Kolkata → Other city</DirBtn>
                 <DirBtn active={direction === "into_kolkata"} onClick={() => setDirection("into_kolkata")}>← Other city → Kolkata</DirBtn>
               </div>
-              <span className="mc-chip" style={{ background: "var(--surface-hover)", color: "var(--blue-800)", height: "fit-content" }}>{routesEnabledCount} active · {activeRoutes.length} total</span>
+              <span className="mc-chip" style={{ background: "var(--chip-info-bg)", color: "var(--chip-info-fg)", height: "fit-content" }}>{routesEnabledCount} active · {activeRoutes.length} total</span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
@@ -334,9 +334,9 @@ export default function SavariBotDashboard() {
 
 function Banner({ tone, children }: { tone: "info" | "error" | "warn"; children: ReactNode }) {
   const map = {
-    info: { bg: "var(--surface-hover)", color: "var(--blue-800)" },
-    error: { bg: "var(--surface-error)", color: "var(--red-800)" },
-    warn: { bg: "var(--surface-warning)", color: "var(--yellow-800)" },
+    info: { bg: "var(--chip-info-bg)", color: "var(--chip-info-fg)" },
+    error: { bg: "var(--chip-error-bg)", color: "var(--chip-error-fg)" },
+    warn: { bg: "var(--chip-warn-bg)", color: "var(--chip-warn-fg)" },
   }[tone];
   return <p style={{ borderRadius: 12, padding: "8px 12px", font: "500 12px var(--font-body)", background: map.bg, color: map.color }}>{children}</p>;
 }
@@ -357,8 +357,8 @@ function DirBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button onClick={onClick} style={{
       borderRadius: 9999, padding: "7px 14px", cursor: "pointer", font: "600 12px var(--font-heading)",
       border: `1px solid ${active ? "var(--blue-600)" : "var(--stroke-primary)"}`,
-      background: active ? "var(--surface-hover)" : "transparent",
-      color: active ? "var(--blue-800)" : "var(--text-body-secondary)", transition: "all 160ms ease-out",
+      background: active ? "var(--chip-info-bg)" : "transparent",
+      color: active ? "var(--chip-info-fg)" : "var(--text-body-secondary)", transition: "all 160ms ease-out",
     }}>{children}</button>
   );
 }

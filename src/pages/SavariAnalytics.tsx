@@ -333,7 +333,7 @@ export default function SavariAnalytics() {
                     <td className="mc-num" style={{ padding: "9px 12px", font: "600 11px var(--font-body)", color: "var(--blue-600)", whiteSpace: "nowrap" }}>{b.bookingId}</td>
                     <td className="mc-num" style={{ padding: "9px 12px", font: "500 11px var(--font-body)", color: "var(--text-body)", whiteSpace: "nowrap" }}>{b.startDate || "—"}</td>
                     <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
-                      <span className="mc-chip" style={{ background: "var(--surface-hover)", color: "var(--blue-800)" }}>{b.tripTypeName}</span>
+                      <span className="mc-chip" style={{ background: "var(--chip-info-bg)", color: "var(--chip-info-fg)" }}>{b.tripTypeName}</span>
                     </td>
                     <td style={{ padding: "9px 12px", font: "500 11px var(--font-body)", color: "var(--text-body)", whiteSpace: "nowrap" }}>{b.carType}</td>
                     <td style={{ padding: "9px 12px", font: "500 11px var(--font-body)", color: "var(--text-body)", whiteSpace: "nowrap" }}>{b.pickCity}</td>

@@ -50,6 +50,12 @@
   --stroke-hover:var(--grey-600);
   --stroke-active:var(--blue-600);
 
+  /* Chip pairs — light: light tint bg + dark text */
+  --chip-info-bg:var(--blue-200);    --chip-info-fg:var(--blue-800);
+  --chip-success-bg:var(--green-200); --chip-success-fg:var(--green-800);
+  --chip-warn-bg:var(--yellow-200);  --chip-warn-fg:var(--yellow-800);
+  --chip-error-bg:var(--red-200);    --chip-error-fg:var(--red-800);
+
   --shadow-drop:0 8px 24px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.05);
   --shadow-drop-lg:0 20px 60px rgba(2,30,79,.16), 0 4px 12px rgba(0,0,0,.08);
   --shadow-focus:0 0 0 3px rgba(21,121,190,.28);
@@ -80,6 +86,12 @@
 
   --stroke-primary:#2f2f2f;
   --stroke-hover:var(--grey-600);
+
+  /* Chip pairs — dark: translucent tint bg + LIGHT text (fixes invisible text) */
+  --chip-info-bg:rgba(21,121,190,.22);    --chip-info-fg:#8fc4e8;
+  --chip-success-bg:rgba(43,162,76,.22);  --chip-success-fg:#7fd89b;
+  --chip-warn-bg:rgba(213,140,0,.24);     --chip-warn-fg:#e8b45c;
+  --chip-error-bg:rgba(228,62,43,.24);    --chip-error-fg:#f0928a;
 
   --shadow-drop:0 8px 24px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.4);
   --shadow-drop-lg:0 20px 60px rgba(0,0,0,.6), 0 4px 12px rgba(0,0,0,.5);

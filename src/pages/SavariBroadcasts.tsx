@@ -261,7 +261,7 @@ export default function SavariBroadcastsPage() {
                           <p style={{ font: "700 14px var(--font-heading)", color: "var(--text-heading)" }}>{g.title}</p>
                           <p style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)" }}>{g.subtitle}</p>
                         </div>
-                        <span className="mc-chip" style={{ background: "var(--surface-hover)", color: "var(--blue-800)", height: "fit-content" }}>
+                        <span className="mc-chip" style={{ background: "var(--chip-info-bg)", color: "var(--chip-info-fg)", height: "fit-content" }}>
                           {g.kind === "return_pair" ? "Return pair" : "Repeat corridor"}
                         </span>
                       </div>
@@ -372,9 +372,9 @@ function BookingCard({ p, onOpenDetail, onAccept }: { p: ParsedBooking; onOpenDe
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-          {p.isPrepaid && <span className="mc-chip" style={{ background: "var(--surface-success)", color: "var(--green-800)" }}>Pre Paid</span>}
+          {p.isPrepaid && <span className="mc-chip" style={{ background: "var(--chip-success-bg)", color: "var(--chip-success-fg)" }}>Pre Paid</span>}
           {p.tripTypeName && (
-            <span className="mc-chip" style={{ background: "var(--surface-hover)", color: "var(--blue-800)" }}>
+            <span className="mc-chip" style={{ background: "var(--chip-info-bg)", color: "var(--chip-info-fg)" }}>
               {p.tripTypeName.length > 28 ? `${p.tripTypeName.slice(0, 28)}…` : p.tripTypeName}
             </span>
           )}
@@ -406,11 +406,11 @@ function BookingCard({ p, onOpenDetail, onAccept }: { p: ParsedBooking; onOpenDe
           <p style={{ font: "400 10px var(--font-body)", color: "var(--text-body-secondary)" }}>Collect</p>
           <p className="mc-num" style={{ font: "700 14px var(--font-body)", color: "var(--text-heading)" }}>{p.cashToCollect > 0 ? formatCurrency(p.cashToCollect) : "—"}</p>
         </div>
-        <div style={{ padding: "8px 4px", background: "var(--surface-hover)" }}>
-          <p className="mc-overline" style={{ color: "var(--blue-800)" }}>Pickup trip</p>
-          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--blue-800)" }}>{parts.dateStr}</p>
-          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--blue-800)" }}>{parts.timeStr}</p>
-          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--blue-800)" }}>{kmStr}</p>
+        <div style={{ padding: "8px 4px", background: "var(--chip-info-bg)" }}>
+          <p className="mc-overline" style={{ color: "var(--chip-info-fg)" }}>Pickup trip</p>
+          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--chip-info-fg)" }}>{parts.dateStr}</p>
+          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--chip-info-fg)" }}>{parts.timeStr}</p>
+          <p className="mc-num" style={{ font: "700 12px/1.3 var(--font-body)", color: "var(--chip-info-fg)" }}>{kmStr}</p>
         </div>
       </div>
 
