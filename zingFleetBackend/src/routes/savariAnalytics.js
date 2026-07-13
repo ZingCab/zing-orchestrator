@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { analyticsSupabase } = require("../lib/savariAnalytics");
+const { analyticsSupabase, SAVARI_BOOKINGS_TABLE } = require("../lib/savariAnalytics");
 
 // Cache the computed payload briefly so repeated page loads don't re-query the
 // whole bookings table each time (reduces egress against the analytics DB).
@@ -18,10 +18,13 @@ router.get("/dashboard", async (_req, res, next) => {
 
     let bookings, error;
     try {
+      // .range() lifts PostgREST's default 1000-row cap so aggregates cover
+      // the whole table, not just the first 1000 rows.
       ({ data: bookings, error } = await analyticsSupabase
-        .from("bookings")
+        .from(SAVARI_BOOKINGS_TABLE)
         .select("*")
         .order("created_at", { ascending: false })
+        .range(0, 99999)
         .abortSignal(controller.signal));
     } finally {
       clearTimeout(timeout);
