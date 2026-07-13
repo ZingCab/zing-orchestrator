@@ -5,8 +5,15 @@
 const DEFAULT_BOOKING_API =
   "https://vendor.savaari.com/vendor/api/booking/v1/booking.php";
 
-/** Same as vendorToken on vendor.savaari.com */
+/**
+ * Same as vendorToken on vendor.savaari.com. This is a per-session token that
+ * ROTATES/EXPIRES — set SAVAARI_VENDOR_TOKEN in the backend .env and refresh it
+ * when the feed goes empty (copy the current vendorToken from a logged-in
+ * vendor.savaari.com session). The baked-in value is only a last-resort default
+ * and will eventually go stale.
+ */
 const SAVAARI_VENDOR_TOKEN =
+  process.env.SAVAARI_VENDOR_TOKEN ||
   "SkM5QmlFaVFsNEdvVjRHbFB4N2pXdXcrQjFSc296YmNPMnAzTUVkbWtYYUhjeDJmNVdrU3JlR2VWNHYxVnVWcHAyL0pSTGVBQjVJU0ZMeEgwQVVZTmFyWStuSitQcUh0cVpzaTFqOGhZc0E1a0ZFMUFTK0ZMeW0zYUd1dGlleXc=";
 
 const HEADERS = {
