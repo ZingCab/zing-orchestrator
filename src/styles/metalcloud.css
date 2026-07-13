@@ -1,0 +1,140 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   MetalCloud / NowPurchase design tokens — SCOPED to .mc so the rest of the
+   app (shadcn/Inter) is untouched. Apply `class="mc"` (add `dark` for dark).
+   Ref: NowPurchase & MetalCloud Design System.
+   ────────────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;700;800;900&family=Oxanium:wght@400;500;600;700;800&display=swap');
+
+.mc {
+  /* Fonts */
+  --font-heading: "Urbanist", system-ui, -apple-system, sans-serif;
+  --font-body: "Oxanium", "Urbanist", ui-sans-serif, system-ui, sans-serif;
+
+  /* Greyscale */
+  --grey-100:#f2f2f2; --grey-200:#e6e6e6; --grey-300:#cccccc; --grey-400:#b3b3b3;
+  --grey-500:#999999; --grey-600:#808080; --grey-700:#666666; --grey-800:#4d4d4d;
+  --grey-900:#333333; --grey-1000:#1a1a1a; --grey-1100:#0d0d0d;
+
+  /* Blue — primary brand ramp */
+  --blue-100:#e8f2f8; --blue-200:#d0e4f2; --blue-300:#a1c9e5; --blue-400:#73afd8;
+  --blue-500:#4494cb; --blue-600:#1579be; --blue-700:#116198; --blue-800:#0d4972;
+  --blue-900:#08304c; --blue-1000:#041826; --blue-1100:#020c13;
+
+  /* Status + domain */
+  --red-100:#fcecea; --red-200:#fad8d5; --red-600:#e43e2b; --red-800:#89251a;
+  --green-200:#d5ecdb; --green-600:#2ba24c; --green-800:#1a612e;
+  --yellow-100:#fbf3e5; --yellow-200:#f7e8cc; --yellow-600:#d58c00; --yellow-800:#805400;
+  --purple-100:#f4ebfc; --purple-200:#ead7f9; --purple-600:#9636e1; --purple-800:#5a2087;
+  --teal-100:#e5f5f5; --teal-200:#cceaea; --teal-600:#009797; --teal-800:#005b5b;
+
+  /* Semantic — light */
+  --surface-page:#ffffff;
+  --surface-card:#ffffff;
+  --surface-card-secondary:var(--blue-200);
+  --surface-table-header:var(--grey-100);
+  --surface-hover:var(--blue-200);
+  --surface-action:var(--blue-600);
+  --surface-action-hover:var(--blue-800);
+  --surface-success:var(--green-200);
+  --surface-warning:var(--yellow-200);
+  --surface-error:var(--red-200);
+
+  --text-heading:var(--grey-1100);
+  --text-heading-secondary:var(--grey-700);
+  --text-body:var(--grey-1000);
+  --text-body-secondary:var(--grey-600);
+  --text-action:var(--blue-600);
+  --text-on-action:#ffffff;
+
+  --stroke-primary:var(--grey-300);
+  --stroke-hover:var(--grey-600);
+  --stroke-active:var(--blue-600);
+
+  /* Chip pairs — light: light tint bg + dark text */
+  --chip-info-bg:var(--blue-200);    --chip-info-fg:var(--blue-800);
+  --chip-success-bg:var(--green-200); --chip-success-fg:var(--green-800);
+  --chip-warn-bg:var(--yellow-200);  --chip-warn-fg:var(--yellow-800);
+  --chip-error-bg:var(--red-200);    --chip-error-fg:var(--red-800);
+
+  --shadow-drop:0 8px 24px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-drop-lg:0 20px 60px rgba(2,30,79,.16), 0 4px 12px rgba(0,0,0,.08);
+  --shadow-focus:0 0 0 3px rgba(21,121,190,.28);
+
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-card:20px;
+  --radius-2xl:24px; --radius-pill:9999px;
+
+  font-family: var(--font-body);
+  color: var(--text-body);
+  background: var(--surface-page);
+}
+
+.mc.dark {
+  --surface-page:#0a0a0a;
+  --surface-card:#161616;
+  --surface-card-secondary:var(--blue-900);
+  --surface-table-header:#1f1f1f;
+  --surface-hover:var(--blue-900);
+  --surface-action-hover:var(--blue-500);
+  --surface-success:var(--green-800);
+  --surface-warning:var(--yellow-800);
+  --surface-error:var(--red-800);
+
+  --text-heading:#f2f2f2;
+  --text-heading-secondary:var(--grey-500);
+  --text-body:#e6e6e6;
+  --text-body-secondary:var(--grey-500);
+
+  --stroke-primary:#2f2f2f;
+  --stroke-hover:var(--grey-600);
+
+  /* Chip pairs — dark: translucent tint bg + LIGHT text (fixes invisible text) */
+  --chip-info-bg:rgba(21,121,190,.22);    --chip-info-fg:#8fc4e8;
+  --chip-success-bg:rgba(43,162,76,.22);  --chip-success-fg:#7fd89b;
+  --chip-warn-bg:rgba(213,140,0,.24);     --chip-warn-fg:#e8b45c;
+  --chip-error-bg:rgba(228,62,43,.24);    --chip-error-fg:#f0928a;
+
+  --shadow-drop:0 8px 24px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.4);
+  --shadow-drop-lg:0 20px 60px rgba(0,0,0,.6), 0 4px 12px rgba(0,0,0,.5);
+}
+
+/* Typographic helpers */
+.mc h1,.mc h2,.mc h3,.mc h4 { font-family: var(--font-heading); color: var(--text-heading); margin:0; }
+.mc .mc-num { font-family: var(--font-body); font-variant-numeric: tabular-nums; letter-spacing:-.01em; }
+.mc .mc-overline { font: 700 10px/12px var(--font-body); letter-spacing:.12em; text-transform:uppercase; color: var(--text-body-secondary); }
+
+/* Card */
+.mc-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-drop);
+  padding: 24px;
+}
+
+/* Chips */
+.mc-chip {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 10px; border-radius: var(--radius-sm);
+  font: 600 11px/1.4 var(--font-body); white-space:nowrap;
+}
+
+/* Buttons */
+.mc-btn {
+  height:40px; padding:0 18px; border-radius: var(--radius-pill);
+  font: 600 13px var(--font-heading); border:none; cursor:pointer;
+  display:inline-flex; align-items:center; gap:8px;
+  transition: background 160ms ease-out, color 160ms ease-out;
+}
+.mc-btn-primary { background: var(--surface-action); color: var(--text-on-action); }
+.mc-btn-primary:hover { background: var(--surface-action-hover); }
+.mc-btn-ghost { background: transparent; border:1px solid var(--stroke-primary); color: var(--text-body); }
+.mc-btn-ghost:hover { background: var(--surface-hover); border-color: var(--stroke-hover); }
+
+/* Segmented control */
+.mc-seg { display:inline-flex; padding:3px; gap:2px; border-radius: var(--radius-pill); background: var(--surface-table-header); }
+.mc-seg button {
+  border:none; background:transparent; cursor:pointer;
+  padding:5px 14px; border-radius: var(--radius-pill);
+  font: 600 12px var(--font-heading); color: var(--text-body-secondary);
+  transition: background 160ms ease-out, color 160ms ease-out;
+}
+.mc-seg button[data-active="true"] { background: var(--surface-action); color: var(--text-on-action); }
