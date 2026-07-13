@@ -22,6 +22,26 @@ const biddingEnabled =
 
 const processedBookings = new Set();
 
+// Tracks the last-upserted signature per booking so we only write to the
+// analytics DB when a booking is new or its relevant fields actually changed.
+// The same broadcast bookings sit in the feed for hours; without this we would
+// re-upsert every row on every poll tick (a write storm that burns quota).
+const upsertedSignatures = new Map();
+const UPSERT_CACHE_MAX = 5000;
+
+function upsertSignature(b) {
+  return [
+    b.car_type,
+    b.vendor_cost,
+    b.trip_type_name,
+    b.total_amt,
+    b.start_date,
+    b.pick_city,
+    b.pick_loc,
+    b.payment_status,
+  ].join("|");
+}
+
 function num(v, d = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
@@ -264,9 +284,19 @@ async function tick() {
     console.log(LOG, ts, `poll ok, ${broadcastDetails.length} booking(s) in feed`);
 
     for (const booking of broadcastDetails) {
-      if (booking.booking_id) {
-        upsertBooking(booking).catch((e) => console.error(LOG, "[analytics upsert error]", e?.message || e));
-      }
+      if (!booking.booking_id) continue;
+      const id = String(booking.booking_id);
+      const sig = upsertSignature(booking);
+      // Skip rows we've already written unchanged — avoids re-upserting the
+      // same feed bookings every tick.
+      if (upsertedSignatures.get(id) === sig) continue;
+      if (upsertedSignatures.size >= UPSERT_CACHE_MAX) upsertedSignatures.clear();
+      upsertedSignatures.set(id, sig);
+      upsertBooking(booking).catch((e) => {
+        // Roll back the marker so a failed write is retried next tick.
+        upsertedSignatures.delete(id);
+        console.error(LOG, "[analytics upsert error]", e?.message || e);
+      });
     }
 
     let eligibleCount = 0;

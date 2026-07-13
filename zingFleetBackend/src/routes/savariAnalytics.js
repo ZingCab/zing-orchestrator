@@ -1,13 +1,47 @@
 const router = require("express").Router();
 const { analyticsSupabase } = require("../lib/savariAnalytics");
 
+// Cache the computed payload briefly so repeated page loads don't re-query the
+// whole bookings table each time (reduces egress against the analytics DB).
+const CACHE_TTL_MS = 60000;
+let cache = { at: 0, payload: null };
+
 router.get("/dashboard", async (_req, res, next) => {
   try {
-    const { data: bookings, error } = await analyticsSupabase
-      .from("bookings")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
+    if (cache.payload && Date.now() - cache.at < CACHE_TTL_MS) {
+      return res.json({ success: true, data: cache.payload });
+    }
+
+    // Fail fast instead of hanging ~30s when the analytics DB is unreachable.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    let bookings, error;
+    try {
+      ({ data: bookings, error } = await analyticsSupabase
+        .from("bookings")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .abortSignal(controller.signal));
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (error) {
+      // Timeout / connectivity failure to the analytics Supabase project.
+      const msg = String(error.message || "");
+      if (
+        controller.signal.aborted ||
+        error.name === "AbortError" ||
+        /timed out|522|fetch failed|ECONNREFUSED|ENOTFOUND/i.test(msg)
+      ) {
+        return res.status(503).json({
+          success: false,
+          error: "Analytics database is unavailable. The Supabase project may be paused or down.",
+        });
+      }
+      throw error;
+    }
 
     const rows = bookings || [];
     const now = new Date();
@@ -57,7 +91,9 @@ router.get("/dashboard", async (_req, res, next) => {
 
     const recent = rows.slice(0, 50);
 
-    res.json({ success: true, data: { summary, matrix, monthly, recent } });
+    const payload = { summary, matrix, monthly, recent };
+    cache = { at: Date.now(), payload };
+    res.json({ success: true, data: payload });
   } catch (err) {
     next(err);
   }
