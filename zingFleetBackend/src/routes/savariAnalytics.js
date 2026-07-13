@@ -58,29 +58,52 @@ router.get("/dashboard", async (_req, res, next) => {
 
     const rows = bookings || [];
     const now = new Date();
-    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
-
-    const inMonth = (r, m) => (r.start_date || r.created_at || "").slice(0, 7) === m;
-    const thisM = rows.filter((r) => inMonth(r, thisMonth));
-    const lastM = rows.filter((r) => inMonth(r, lastMonth));
+    const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     const sum = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
     const avg = (arr, k) => (arr.length ? sum(arr, k) / arr.length : 0);
-    const pctChange = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : 0);
 
+    // ── Headline totals (exact, all-time — no misleading MoM %) ─────────────
     const summary = {
       totalTrips: rows.length,
       totalEarned: sum(rows, "vendor_cost"),
       avgPayout: Math.round(avg(rows, "vendor_cost")),
       avgSavariCutPct: Number(avg(rows, "savari_cut_pct").toFixed(1)),
-      tripsTrend: pctChange(thisM.length, lastM.length),
-      earnedTrend: pctChange(sum(thisM, "vendor_cost"), sum(lastM, "vendor_cost")),
-      payoutTrend: pctChange(avg(thisM, "vendor_cost"), avg(lastM, "vendor_cost")),
     };
 
-    // car_type × trip_type matrix
+    // ── Generic grouper → sorted array with count + payout economics ────────
+    const groupBy = (keyFn) => {
+      const m = new Map();
+      for (const r of rows) {
+        const key = keyFn(r);
+        if (!key) continue;
+        if (!m.has(key)) m.set(key, { trips: 0, payout: 0, cutPctSum: 0 });
+        const g = m.get(key);
+        g.trips += 1;
+        g.payout += Number(r.vendor_cost || 0);
+        g.cutPctSum += Number(r.savari_cut_pct || 0);
+      }
+      return [...m.entries()]
+        .map(([key, g]) => ({
+          key,
+          trips: g.trips,
+          payout: Math.round(g.payout),
+          avgPayout: Math.round(g.payout / g.trips),
+          avgCutPct: Number((g.cutPctSum / g.trips).toFixed(1)),
+        }))
+        .sort((a, b) => b.trips - a.trips);
+    };
+
+    const byTripType = groupBy((r) => r.trip_type_name || "Other");
+    const byCarType = groupBy((r) => r.car_type || "Unknown");
+    const byCity = groupBy((r) => r.pick_city || "Unknown").slice(0, 12);
+    const byPayment = groupBy((r) => r.payment_status || "Unknown").map((g) => ({
+      status: g.key,
+      trips: g.trips,
+      payout: g.payout,
+    }));
+
+    // ── car_type × trip_type demand matrix (counts) ─────────────────────────
     const matrix = {};
     for (const r of rows) {
       const car = r.car_type || "Unknown";
@@ -89,22 +112,53 @@ router.get("/dashboard", async (_req, res, next) => {
       matrix[car][trip] = (matrix[car][trip] || 0) + 1;
     }
 
-    // monthly by trip type + yoy
-    const monthly = {};
+    // ── Honest monthly time series, keyed by created_at (feed date) ─────────
+    // created_at never lands in the future, so no phantom/partial future months.
+    // The in-progress month is flagged so the UI can mark it as incomplete.
+    const monthlyMap = new Map();
     for (const r of rows) {
-      const d = r.start_date || r.created_at || "";
-      const ym = d.slice(0, 7);
+      const ym = (r.created_at || "").slice(0, 7);
       if (!ym) continue;
+      if (!monthlyMap.has(ym)) monthlyMap.set(ym, { trips: 0, earned: 0, byType: {} });
+      const g = monthlyMap.get(ym);
       const trip = r.trip_type_name || "Other";
-      if (!monthly[ym]) monthly[ym] = { trips: 0, earned: 0, byType: {} };
-      monthly[ym].trips += 1;
-      monthly[ym].earned += Number(r.vendor_cost || 0);
-      monthly[ym].byType[trip] = (monthly[ym].byType[trip] || 0) + 1;
+      g.trips += 1;
+      g.earned += Number(r.vendor_cost || 0);
+      g.byType[trip] = (g.byType[trip] || 0) + 1;
     }
+    const monthlySeries = [...monthlyMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ym, g]) => ({
+        ym,
+        trips: g.trips,
+        earned: Math.round(g.earned),
+        byType: g.byType,
+        partial: ym === currentYm,
+      }));
+
+    // Trip-type keys present, most common first — for stable chart series/legends.
+    const tripTypes = byTripType.map((t) => t.key);
+
+    const createdDates = rows.map((r) => r.created_at).filter(Boolean).sort();
+    const dateRange = {
+      first: createdDates[0] || null,
+      last: createdDates[createdDates.length - 1] || null,
+    };
 
     const recent = rows.slice(0, 50);
 
-    const payload = { summary, matrix, monthly, recent };
+    const payload = {
+      summary,
+      matrix,
+      monthlySeries,
+      tripTypes,
+      byTripType,
+      byCarType,
+      byCity,
+      byPayment,
+      dateRange,
+      recent,
+    };
     cache = { at: Date.now(), payload };
     res.json({ success: true, data: payload });
   } catch (err) {
