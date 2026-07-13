@@ -21,8 +21,10 @@ create table if not exists public.savari_bookings (
 create index if not exists idx_savari_bookings_created_at on public.savari_bookings (created_at desc);
 create index if not exists idx_savari_bookings_start_date on public.savari_bookings (start_date);
 
--- RLS: lock down; only service_role (backend) reads/writes. No anon access.
-alter table public.savari_bookings enable row level security;
+-- No RLS — matches the rest of this schema. All access is gated by the Express
+-- backend, which connects with the project's publishable key (same as cars,
+-- drivers, savari_bot_config, etc.). Enabling RLS here would block those reads.
+alter table public.savari_bookings disable row level security;
 
 -- 1246 rows exported $(date)
 insert into public.savari_bookings (booking_id,car_type,vendor_cost,trip_type_name,total_amt,start_date,pick_city,pick_loc,payment_status,savari_cut,savari_cut_pct,created_at,updated_at) values ('10443324','Toyota Etios or Equivalent',2460,'One Way Drop',2861,'2026-03-29','Jamshedpur, Jharkhand','Tatanagar Railway Station, Jamshedpur, Tata Nagar, Khasmahal, Jugsalai, Bagbera colony, Jharkhand, India','Advance',401,14.02,'2026-03-28T09:23:14.425069+00:00','2026-03-28T10:16:15.263+00:00') on conflict (booking_id) do nothing;
