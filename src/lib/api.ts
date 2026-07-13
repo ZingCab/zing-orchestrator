@@ -142,6 +142,13 @@ export const api = {
       { method: "PUT", body: JSON.stringify(body) },
     ),
 
+  /** Update just the (rotating) Savaari vendor token for a vendor. */
+  putSavariBotToken: (vendorId: string, token: string) =>
+    request<{ ok: boolean }>("/api/savari-bot/token", {
+      method: "PUT",
+      body: JSON.stringify({ vendor_id: vendorId, token }),
+    }),
+
   // Drivers
   getDrivers: () => request<any[]>("/api/drivers"),
   getSettlementModeHistory: () => request<any[]>("/api/drivers/settlement-mode-history"),

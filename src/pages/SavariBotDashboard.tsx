@@ -68,6 +68,8 @@ export default function SavariBotDashboard() {
   const [newCity, setNewCity] = useState("");
   const [newMinCost, setNewMinCost] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
 
   const botQuery = useQuery({
     queryKey: ["savari-bot", queryVendorId],
@@ -83,10 +85,25 @@ export default function SavariBotDashboard() {
       });
       setToggles(ui.toggles); setRoutesOut(ui.routesOut); setRoutesIn(ui.routesIn);
       setRoundTrip(ui.roundTrip); setRental(ui.rental); setBotConfig(ui.botConfig); setVendorLocation(ui.vendorLocation);
+      setTokenInput(String((botQuery.data.config as any).savaariVendorToken || ""));
     } catch (e) {
       toast({ title: "Could not load bot config", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }, [botQuery.data, botQuery.dataUpdatedAt, dirty]);
+
+  const saveToken = async () => {
+    setSavingToken(true);
+    try {
+      await api.putSavariBotToken(queryVendorId, tokenInput.trim());
+      const ts = new Date().toLocaleTimeString("en-IN", { hour12: false });
+      setActivityLog((prev) => [`[${ts}] Savaari token updated`, ...prev].slice(0, 50));
+      toast({ title: "Token saved", description: "Feed will use the new token within ~1 min." });
+    } catch (e) {
+      toast({ title: "Token save failed", description: e instanceof ApiError ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setSavingToken(false);
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -308,6 +325,25 @@ export default function SavariBotDashboard() {
               <TextField label="Vendor location (pick city filter)" value={vendorLocation} onChange={(v) => { setVendorLocation(v); markDirty(); }} />
               <TextField label="API URL" value={botConfig.apiUrl} onChange={(v) => { setBotConfig((s) => ({ ...s, apiUrl: v })); markDirty(); }} />
               <TextField label="Car types (comma separated)" value={botConfig.carTypes} onChange={(v) => { setBotConfig((s) => ({ ...s, carTypes: v })); markDirty(); }} />
+            </div>
+
+            {/* Savaari vendor token — separate save (rotating credential) */}
+            <div style={{ marginTop: 16, borderTop: "1px solid var(--stroke-primary)", paddingTop: 16 }}>
+              <label style={{ display: "block" }}>
+                <span className="mc-overline" style={{ display: "block", marginBottom: 6 }}>Savaari vendor token</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Input type="password" placeholder="Paste current vendorToken from vendor.savaari.com"
+                    value={tokenInput} onChange={(e) => setTokenInput(e.target.value)}
+                    style={{ ...INPUT_STYLE, flex: 1, minWidth: 200 }} />
+                  <button className="mc-btn mc-btn-primary" onClick={saveToken} disabled={savingToken}>
+                    {savingToken ? "Saving…" : "Update token"}
+                  </button>
+                </div>
+              </label>
+              <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
+                Rotating credential — if the feed goes empty, copy the current <code>vendorToken</code> from a logged-in
+                Savaari session and update it here. No redeploy needed; the feed picks it up within ~1 min.
+              </p>
             </div>
             {footer}
           </div>

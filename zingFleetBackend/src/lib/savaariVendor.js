@@ -2,6 +2,8 @@
  * Shared Savaari vendor session + upstream fetch (used by /api/savaari routes and the bot scheduler).
  */
 
+const { supabase } = require("./supabase");
+
 const DEFAULT_BOOKING_API =
   "https://vendor.savaari.com/vendor/api/booking/v1/booking.php";
 
@@ -15,6 +17,33 @@ const DEFAULT_BOOKING_API =
 const SAVAARI_VENDOR_TOKEN =
   process.env.SAVAARI_VENDOR_TOKEN ||
   "SkM5QmlFaVFsNEdvVjRHbFB4N2pXdXcrQjFSc296YmNPMnAzTUVkbWtYYUhjeDJmNVdrU3JlR2VWNHYxVnVWcHAyL0pSTGVBQjVJU0ZMeEgwQVVZTmFyWStuSitQcUh0cVpzaTFqOGhZc0E1a0ZFMUFTK0ZMeW0zYUd1dGlleXc=";
+
+// Token source of truth is savari_bot_config.savaari_vendor_token in Supabase
+// (updatable from the Bot dashboard). Falls back to env, then the baked value.
+// Cached briefly so we don't hit the DB on every upstream call.
+let _tokenCache = { at: 0, token: "" };
+const TOKEN_TTL_MS = 60000;
+
+async function getVendorToken() {
+  const now = Date.now();
+  if (_tokenCache.token && now - _tokenCache.at < TOKEN_TTL_MS) return _tokenCache.token;
+  let token = SAVAARI_VENDOR_TOKEN;
+  try {
+    const { data } = await supabase
+      .from("savari_bot_config")
+      .select("savaari_vendor_token")
+      .not("savaari_vendor_token", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const dbToken = data && data.savaari_vendor_token && String(data.savaari_vendor_token).trim();
+    if (dbToken) token = dbToken;
+  } catch {
+    /* fall back to env / baked default */
+  }
+  _tokenCache = { at: now, token };
+  return token;
+}
 
 const HEADERS = {
   Accept: "application/json, text/plain, */*",
@@ -64,7 +93,7 @@ async function fetchSavaariNewBusiness(bookingId = "0") {
     (process.env.SAVAARI_BOOKING_API_URL || "").trim() || DEFAULT_BOOKING_API;
   const url = new URL(base);
   url.searchParams.set("action", "getNewBusiness");
-  url.searchParams.set("vendorToken", SAVAARI_VENDOR_TOKEN);
+  url.searchParams.set("vendorToken", await getVendorToken());
   url.searchParams.set("booking_id", String(bookingId));
 
   const upstreamRes = await fetch(url.toString(), {
@@ -112,7 +141,7 @@ async function postSavaariPostInterest(p) {
 
   params.set("action", "postInterest");
   // Include vendorToken too. Some sessions accept cookies-only, others require token.
-  params.set("vendorToken", SAVAARI_VENDOR_TOKEN);
+  params.set("vendorToken", await getVendorToken());
   params.set("vendor_id", String(p.vendorId ?? "").trim());
   params.set("broadcast_id", String(p.broadcastId ?? "").trim());
   params.set("booking_id", String(p.bookingId ?? "").trim());

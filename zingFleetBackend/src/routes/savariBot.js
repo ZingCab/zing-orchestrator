@@ -100,4 +100,29 @@ router.put("/config", validate(putSchema), async (req, res, next) => {
   }
 });
 
+/**
+ * PUT /api/savari-bot/token — update just the Savaari vendorToken for a vendor.
+ * Kept separate from /config (which goes through an RPC) so refreshing the
+ * rotating token is a one-field, no-redeploy operation.
+ * Body: { vendor_id, token }
+ */
+router.put("/token", async (req, res, next) => {
+  try {
+    const vendorId = String(req.body?.vendor_id ?? "").trim();
+    const token = String(req.body?.token ?? "").trim();
+    if (!vendorId) throw new AppError("vendor_id is required", 400);
+
+    const { error } = await supabase
+      .from("savari_bot_config")
+      .update({ savaari_vendor_token: token || null })
+      .eq("vendor_id", vendorId);
+    if (error) throw new AppError(error.message, 500);
+
+    console.log("[savari-bot] PUT /token vendor_id=", vendorId, "len=", token.length);
+    res.json({ success: true, data: { ok: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
