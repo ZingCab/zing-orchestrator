@@ -16,16 +16,26 @@ router.get("/dashboard", async (_req, res, next) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
-    let bookings, error;
+    let bookings = [];
+    let error = null;
     try {
-      // .range() lifts PostgREST's default 1000-row cap so aggregates cover
-      // the whole table, not just the first 1000 rows.
-      ({ data: bookings, error } = await analyticsSupabase
-        .from(SAVARI_BOOKINGS_TABLE)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(0, 99999)
-        .abortSignal(controller.signal));
+      // PostgREST caps each response at 1000 rows (max-rows), which .range()
+      // can't override — so page through until a short page signals the end.
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error: pageErr } = await analyticsSupabase
+          .from(SAVARI_BOOKINGS_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1)
+          .abortSignal(controller.signal);
+        if (pageErr) {
+          error = pageErr;
+          break;
+        }
+        bookings.push(...(page || []));
+        if (!page || page.length < PAGE) break;
+      }
     } finally {
       clearTimeout(timeout);
     }
