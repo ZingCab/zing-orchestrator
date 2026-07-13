@@ -29,13 +29,14 @@ const inrShort = (n: number) =>
   n >= 1e7 ? `₹${(n / 1e7).toFixed(2)}Cr` : n >= 1e5 ? `₹${(n / 1e5).toFixed(1)}L` : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}k` : `₹${n}`;
 
 /* Follow the app's dark-mode class on <html> so the scoped theme matches. */
+// Savari section defaults to dark. Still reacts if the app ever sets `light`.
 function useDark() {
-  const [dark, setDark] = useState(
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  );
+  const [dark, setDark] = useState(true);
   useEffect(() => {
     const el = document.documentElement;
-    const obs = new MutationObserver(() => setDark(el.classList.contains("dark")));
+    const compute = () => setDark(!el.classList.contains("light"));
+    compute();
+    const obs = new MutationObserver(compute);
     obs.observe(el, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);

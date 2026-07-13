@@ -32,13 +32,14 @@ const INPUT_STYLE: React.CSSProperties = {
   borderColor: "var(--stroke-primary)", background: "var(--surface-page)", color: "var(--text-body)",
 };
 
+// Savari section defaults to dark. Still reacts if the app ever sets `light`.
 function useDark() {
-  const [dark, setDark] = useState(
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  );
+  const [dark, setDark] = useState(true);
   useEffect(() => {
     const el = document.documentElement;
-    const obs = new MutationObserver(() => setDark(el.classList.contains("dark")));
+    const compute = () => setDark(!el.classList.contains("light"));
+    compute();
+    const obs = new MutationObserver(compute);
     obs.observe(el, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);
