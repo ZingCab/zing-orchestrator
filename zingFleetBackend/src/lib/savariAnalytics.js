@@ -1,10 +1,8 @@
-const { createClient } = require("@supabase/supabase-js");
+// Analytics now lives in the main Supabase project (env-based, service-role),
+// in the `savari_bookings` table. The old standalone project was retired.
+const { supabase: analyticsSupabase } = require("./supabase");
 
-const analyticsSupabase = createClient(
-  "https://ysqzomgywvvgjpigxkni.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzcXpvbWd5d3Z2Z2pwaWd4a25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NzkxMzksImV4cCI6MjA5MDI1NTEzOX0.ECq8ag_tFS7aFfQE5rZ-DG97rAYfrQzC33AO24g_Rcw",
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+const SAVARI_BOOKINGS_TABLE = "savari_bookings";
 
 const TRIP_TYPE_MAP = {
   "Outstation (One way Drop)": "One Way Drop",
@@ -39,10 +37,10 @@ async function upsertBooking(b) {
   };
 
   const { error } = await analyticsSupabase
-    .from("bookings")
+    .from(SAVARI_BOOKINGS_TABLE)
     .upsert(row, { onConflict: "booking_id" });
 
   if (error) console.error("[savari-analytics] upsert failed:", error.message);
 }
 
-module.exports = { upsertBooking, analyticsSupabase };
+module.exports = { upsertBooking, analyticsSupabase, SAVARI_BOOKINGS_TABLE };
