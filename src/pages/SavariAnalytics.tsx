@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Link } from "react-router-dom";
-import { ArrowLeft, IndianRupee, Route, Percent, Wallet } from "lucide-react";
+import { IndianRupee, Route, Percent, Wallet } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingState";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, PieChart, Pie, Cell,
 } from "recharts";
-import "@/styles/metalcloud.css";
+import { SavariShell } from "@/components/SavariShell";
+import { useMcDark } from "@/hooks/useMcDark";
 
 /* ── Brand palette ─────────────────────────────────────────────────────── */
 const C = {
@@ -17,8 +17,6 @@ const C = {
   teal: "#009797", purple: "#9636e1",
 };
 
-/* Consistent trip-type colours (used by stacked chart + legend). Anchored on
-   the primary blue for the dominant category; distinct accents for the rest. */
 const TRIP_COLORS: Record<string, string> = {
   "One Way Drop": C.blue600,
   "Round Trip": C.teal,
@@ -38,20 +36,6 @@ const ymLabel = (ym: string) => {
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const inrShort = (n: number) =>
   n >= 1e7 ? `₹${(n / 1e7).toFixed(2)}Cr` : n >= 1e5 ? `₹${(n / 1e5).toFixed(1)}L` : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}k` : `₹${n}`;
-
-// Savari section defaults to dark. Still reacts if the app ever sets `light`.
-function useDark() {
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const el = document.documentElement;
-    const compute = () => setDark(!el.classList.contains("light"));
-    compute();
-    const obs = new MutationObserver(compute);
-    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
 
 type Grp = { key: string; trips: number; payout: number; avgPayout: number; avgCutPct: number };
 type Payment = { status: string; trips: number; payout: number };
@@ -92,7 +76,7 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   );
 }
 
-function BarList({ rows, max, unit }: { rows: { label: string; value: number; note?: string }[]; max: number; unit?: (n: number) => string }) {
+function BarList({ rows, max }: { rows: { label: string; value: number; note?: string }[]; max: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {rows.map((r) => (
@@ -100,7 +84,7 @@ function BarList({ rows, max, unit }: { rows: { label: string; value: number; no
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, gap: 8 }}>
             <span style={{ font: "500 12px var(--font-body)", color: "var(--text-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
             <span className="mc-num" style={{ font: "600 12px var(--font-body)", color: "var(--text-heading)", flexShrink: 0 }}>
-              {unit ? unit(r.value) : r.value}{r.note && <span style={{ color: "var(--text-body-secondary)", fontWeight: 500 }}> · {r.note}</span>}
+              {r.value}{r.note && <span style={{ color: "var(--text-body-secondary)", fontWeight: 500 }}> · {r.note}</span>}
             </span>
           </div>
           <div style={{ height: 8, borderRadius: 9999, background: "var(--surface-table-header)", overflow: "hidden" }}>
@@ -121,7 +105,7 @@ function heatCell(v: number, max: number) {
 }
 
 export default function SavariAnalytics() {
-  const dark = useDark();
+  const dark = useMcDark();
   const { data, isLoading } = useQuery({ queryKey: ["savari-analytics"], queryFn: api.getSavariAnalyticsDashboard });
 
   const summary = data?.summary;
@@ -171,35 +155,23 @@ export default function SavariAnalytics() {
     labelStyle: { fontFamily: "Urbanist", fontWeight: 700, color: dark ? "#f2f2f2" : "#0d0d0d" },
   };
 
-  if (isLoading) return <div className="mc dark"><LoadingSpinner label="Loading Savari analytics…" /></div>;
-  if (!data) return <div className="mc dark" style={{ padding: 48, textAlign: "center", color: "var(--text-body-secondary)" }}>No data yet.</div>;
-
   const rangeLabel =
     range?.first && range?.last
-      ? `${new Date(range.first).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – ${new Date(range.last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
-      : "";
+      ? `${new Date(range.first).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${new Date(range.last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+      : undefined;
+
+  if (isLoading || !data) {
+    return (
+      <SavariShell active="analytics" title="Booking Analytics">
+        {isLoading ? <LoadingSpinner label="Loading analytics…" /> : <div style={{ padding: 48, textAlign: "center", color: "var(--text-body-secondary)" }}>No data yet.</div>}
+      </SavariShell>
+    );
+  }
 
   return (
-    <div className={dark ? "mc dark" : "mc"} style={{ background: "var(--surface-page)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 20px 96px", display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Link to="/savari" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center", borderRadius: 9999 }} aria-label="Back">
-            <ArrowLeft size={18} />
-          </Link>
-          <div style={{ flex: 1 }}>
-            <span className="mc-overline">Savari · Vendor Intelligence</span>
-            <h1 style={{ font: "800 24px/1.1 var(--font-heading)", marginTop: 2 }}>Booking Analytics</h1>
-          </div>
-          {rangeLabel && (
-            <div style={{ textAlign: "right" }}>
-              <div className="mc-overline">Data range</div>
-              <div className="mc-num" style={{ font: "600 12px var(--font-body)", color: "var(--text-body)", marginTop: 2 }}>{rangeLabel}</div>
-            </div>
-          )}
-        </div>
-
-        {/* ── OVERVIEW ─────────────────────────────────────────── */}
+    <SavariShell active="analytics" title="Booking Analytics" subtitle={rangeLabel ? `Broadcasts captured · ${rangeLabel}` : undefined}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* OVERVIEW */}
         <SectionLabel>Overview</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
           <Kpi label="Total bookings" value={summary.totalTrips.toLocaleString("en-IN")} sub="broadcasts captured" icon={Route} />
@@ -208,7 +180,7 @@ export default function SavariAnalytics() {
           <Kpi label="Avg platform cut" value={`${summary.avgSavariCutPct}%`} sub="Savari commission" icon={Percent} />
         </div>
 
-        {/* ── TRENDS ───────────────────────────────────────────── */}
+        {/* TRENDS */}
         <SectionLabel>Trends over time</SectionLabel>
         <Panel title="Demand & revenue by month" sub="Bookings (bars) and vendor payout (line), grouped by trip month.">
           <div style={{ height: 280 }}>
@@ -257,7 +229,7 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
 
-        {/* ── DEMAND ───────────────────────────────────────────── */}
+        {/* DEMAND */}
         <SectionLabel>Where the demand is</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
           <Panel title="Top pickup cities" sub="Booking volume by pickup city — position drivers here.">
@@ -305,7 +277,7 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
 
-        {/* ── ECONOMICS & RISK ─────────────────────────────────── */}
+        {/* ECONOMICS */}
         <SectionLabel>Economics & risk</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
           <Panel title="Trip-type economics" sub="Volume vs value. High avg payout with decent volume = best to chase.">
@@ -357,7 +329,7 @@ export default function SavariAnalytics() {
           </Panel>
         </div>
 
-        {/* ── DETAIL ───────────────────────────────────────────── */}
+        {/* DETAIL */}
         <SectionLabel>Detail</SectionLabel>
         <Panel title="Recent bookings" sub="Latest 50 broadcasts captured from the Savari feed.">
           <div style={{ overflowX: "auto" }}>
@@ -392,6 +364,6 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
       </div>
-    </div>
+    </SavariShell>
   );
 }

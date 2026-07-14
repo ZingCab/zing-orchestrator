@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { ArrowLeft, BarChart3, ChevronDown, TrendingUp, Scan, Filter, Route, X } from "lucide-react";
+import { TrendingUp, Scan, Filter, Route, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { applySnapshot, buildSavariPutBody, countEnabledRoutes } from "@/lib/savariBotMapping";
 import type { OutstationRoute, RouteDirection, TripToggleId } from "@/data/savariBotDummy";
-import "@/styles/metalcloud.css";
+import { SavariShell } from "@/components/SavariShell";
 
 const DEFAULT_VENDOR_ID = import.meta.env.VITE_SAVARI_VENDOR_ID || "262882";
 
@@ -32,22 +31,7 @@ const INPUT_STYLE: React.CSSProperties = {
   borderColor: "var(--stroke-primary)", background: "var(--surface-page)", color: "var(--text-body)",
 };
 
-// Savari section defaults to dark. Still reacts if the app ever sets `light`.
-function useDark() {
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const el = document.documentElement;
-    const compute = () => setDark(!el.classList.contains("light"));
-    compute();
-    const obs = new MutationObserver(compute);
-    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
-
 export default function SavariBotDashboard() {
-  const dark = useDark();
   const queryClient = useQueryClient();
   const [queryVendorId, setQueryVendorId] = useState(DEFAULT_VENDOR_ID);
 
@@ -139,7 +123,6 @@ export default function SavariBotDashboard() {
   const mm = Math.floor(nextRunSec / 60);
   const ss = nextRunSec % 60;
   const timerLabel = cycleSec <= 0 ? "—" : `${mm}:${ss.toString().padStart(2, "0")}`;
-  const progressPct = cycleSec <= 0 ? 0 : Math.round(((cycleSec - nextRunSec) / cycleSec) * 100);
 
   const activeRoutes = direction === "kolkata_out" ? routesOut : routesIn;
   const setActiveRoutes = direction === "kolkata_out" ? setRoutesOut : setRoutesIn;
@@ -173,9 +156,22 @@ export default function SavariBotDashboard() {
 
   const footer = <ConfigFooter dirty={dirty} onReset={resetFromServer} onSave={saveToServer} saving={saveMutation.isPending} />;
 
+  const actions = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ textAlign: "right" }}>
+        <div className="mc-overline">Next run</div>
+        <div className="mc-num" style={{ font: "700 14px var(--font-body)", color: "var(--text-heading)" }}>{timerLabel}</div>
+      </div>
+      <span className="mc-chip" style={{ background: running ? "var(--chip-success-bg)" : "var(--surface-table-header)", color: running ? "var(--chip-success-fg)" : "var(--text-body-secondary)" }}>
+        <span style={{ width: 6, height: 6, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)" }} />
+        {running ? "Running" : "Stopped"}
+      </span>
+    </div>
+  );
+
   return (
-    <div className={dark ? "mc dark" : "mc"} style={{ background: "var(--surface-page)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "20px 16px 40px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <SavariShell active="bot" title="Booking Bot" subtitle={`Vendor ${botConfig.vendorId || "—"} · ${vendorLocation || "—"}`} actions={actions}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Status banners */}
         {botQuery.isLoading && <Banner tone="info">Loading bot config from API…</Banner>}
         {botQuery.isError && (
@@ -184,36 +180,6 @@ export default function SavariBotDashboard() {
         {botQuery.data && !botQuery.data.config && !botQuery.isLoading && (
           <Banner tone="warn">No config row for vendor {queryVendorId}. Run seed_savari_bot.sql in Supabase.</Banner>
         )}
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <Link to="/savari" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center" }} aria-label="Back"><ArrowLeft size={18} /></Link>
-            <Link to="/savari/analytics" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center" }} aria-label="Analytics"><BarChart3 size={16} /></Link>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ width: 44, height: 44, borderRadius: 9999, background: "var(--surface-action)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                <TrendingUp size={20} color="#fff" />
-              </div>
-              <div>
-                <h1 style={{ font: "800 18px/1.1 var(--font-heading)" }}>Savaari Booking Bot</h1>
-                <p className="mc-num" style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 2 }}>
-                  Vendor {botConfig.vendorId || "—"} · {vendorLocation || "—"}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            <span className="mc-overline">Next run</span>
-            <span className="mc-num" style={{ font: "700 15px var(--font-body)", color: "var(--text-heading)" }}>{timerLabel}</span>
-            <div style={{ width: 112, height: 6, borderRadius: 9999, background: "var(--surface-table-header)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${progressPct}%`, background: "var(--blue-600)", borderRadius: 9999, transition: "width 300ms ease-out" }} />
-            </div>
-            <span className="mc-chip" style={{ background: running ? "var(--chip-success-bg)" : "var(--surface-table-header)", color: running ? "var(--chip-success-fg)" : "var(--text-body-secondary)" }}>
-              <span style={{ width: 6, height: 6, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)" }} />
-              {running ? "Running" : "Stopped"}
-            </span>
-          </div>
-        </div>
 
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
@@ -341,8 +307,8 @@ export default function SavariBotDashboard() {
                 </div>
               </label>
               <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
-                Rotating credential — if the feed goes empty, copy the current <code>vendorToken</code> from a logged-in
-                Savaari session and update it here. No redeploy needed; the feed picks it up within ~1 min.
+                Rotating credential — if the feed goes empty, copy the current vendorToken from a logged-in Savaari
+                session and update it here. No redeploy needed; the feed picks it up within ~1 min.
               </p>
             </div>
             {footer}
@@ -359,12 +325,8 @@ export default function SavariBotDashboard() {
             {activityLog.length === 0 ? <p style={{ color: "var(--text-body-secondary)" }}>No entries</p> : activityLog.map((line, i) => <p key={i}>{line}</p>)}
           </div>
         </div>
-
-        <p style={{ textAlign: "center", font: "400 10px var(--font-body)", color: "var(--text-body-secondary)" }}>
-          Settings load from GET /api/savari-bot/config · <Link to="/savari" style={{ color: "var(--blue-600)" }}>Back to broadcasts</Link>
-        </p>
       </div>
-    </div>
+    </SavariShell>
   );
 }
 
