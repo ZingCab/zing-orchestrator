@@ -142,11 +142,23 @@ export const api = {
       { method: "PUT", body: JSON.stringify(body) },
     ),
 
-  /** Update just the (rotating) Savaari vendor token for a vendor. */
-  putSavariBotToken: (vendorId: string, token: string) =>
+  /**
+   * Update the rotating Savaari vendor token and/or alert config (ntfy topic,
+   * healthchecks ping URL) for a vendor. Only fields present in `fields` are
+   * updated — omit a key to leave it untouched.
+   */
+  putSavariBotToken: (
+    vendorId: string,
+    fields: { token?: string; ntfyTopic?: string; healthchecksUrl?: string },
+  ) =>
     request<{ ok: boolean }>("/api/savari-bot/token", {
       method: "PUT",
-      body: JSON.stringify({ vendor_id: vendorId, token }),
+      body: JSON.stringify({
+        vendor_id: vendorId,
+        ...("token" in fields ? { token: fields.token } : {}),
+        ...("ntfyTopic" in fields ? { ntfy_topic: fields.ntfyTopic } : {}),
+        ...("healthchecksUrl" in fields ? { healthchecks_url: fields.healthchecksUrl } : {}),
+      }),
     }),
 
   // Drivers
