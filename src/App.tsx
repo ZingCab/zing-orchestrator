@@ -17,6 +17,7 @@ import SavariBroadcastsPage from "@/pages/SavariBroadcasts";
 import SavariBookingDetail from "@/pages/SavariBookingDetail";
 import SavariBotDashboard from "@/pages/SavariBotDashboard";
 import SavariAnalytics from "@/pages/SavariAnalytics";
+import SavariFinance from "@/pages/SavariFinance";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ const App = () => (
           <Route path="/savari/booking/:bookingId" element={<SavariBookingDetail />} />
           <Route path="/savari/bot" element={<SavariBotDashboard />} />
           <Route path="/savari/analytics" element={<SavariAnalytics />} />
+          <Route path="/savari/finance" element={<SavariFinance />} />
           <Route path="/" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
           <Route path="/drivers" element={<ProtectedRoute><AppLayout><DriversPage /></AppLayout></ProtectedRoute>} />
           <Route path="/drivers/:id" element={<ProtectedRoute><AppLayout><DriverDetailPage /></AppLayout></ProtectedRoute>} />

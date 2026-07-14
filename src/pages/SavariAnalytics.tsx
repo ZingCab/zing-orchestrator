@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Link } from "react-router-dom";
-import { ArrowLeft, IndianRupee, Route, Percent, Wallet } from "lucide-react";
+import { IndianRupee, Route, Percent, Wallet, MapPin, TrendingUp, AlertTriangle, type LucideIcon } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingState";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, PieChart, Pie, Cell,
 } from "recharts";
-import "@/styles/metalcloud.css";
+import { SavariShell } from "@/components/SavariShell";
+import { useMcDark } from "@/hooks/useMcDark";
 
 /* ── Brand palette ─────────────────────────────────────────────────────── */
 const C = {
@@ -17,8 +17,6 @@ const C = {
   teal: "#009797", purple: "#9636e1",
 };
 
-/* Consistent trip-type colours (used by stacked chart + legend). Anchored on
-   the primary blue for the dominant category; distinct accents for the rest. */
 const TRIP_COLORS: Record<string, string> = {
   "One Way Drop": C.blue600,
   "Round Trip": C.teal,
@@ -31,6 +29,7 @@ const TRIP_COLORS: Record<string, string> = {
 const tripColor = (t: string) => TRIP_COLORS[t] || C.grey500;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ymLabel = (ym: string) => {
   const [y, m] = ym.split("-");
   return `${MONTHS[Number(m) - 1]} ${y.slice(2)}`;
@@ -39,20 +38,7 @@ const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const inrShort = (n: number) =>
   n >= 1e7 ? `₹${(n / 1e7).toFixed(2)}Cr` : n >= 1e5 ? `₹${(n / 1e5).toFixed(1)}L` : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}k` : `₹${n}`;
 
-// Savari section defaults to dark. Still reacts if the app ever sets `light`.
-function useDark() {
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const el = document.documentElement;
-    const compute = () => setDark(!el.classList.contains("light"));
-    compute();
-    const obs = new MutationObserver(compute);
-    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
-
+type IconType = LucideIcon;
 type Grp = { key: string; trips: number; payout: number; avgPayout: number; avgCutPct: number };
 type Payment = { status: string; trips: number; payout: number };
 type Month = { ym: string; trips: number; earned: number; byType: Record<string, number>; partial: boolean };
@@ -67,15 +53,56 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Kpi({ label, value, sub, icon: Icon }: { label: string; value: string; sub?: string; icon: any }) {
+function Sparkline({ data, color, height = 34 }: { data: number[]; color: string; height?: number }) {
+  if (data.length < 2) return <div style={{ height }} />;
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 100;
+  const step = w / (data.length - 1);
+  const pts = data.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * (height - 4) - 2).toFixed(1)}`);
+  const area = `0,${height} ${pts.join(" ")} ${w},${height}`;
+  const gid = `sg-${color.replace(/[^a-z0-9]/gi, "")}`;
   return (
-    <div className="mc-card" style={{ padding: 20 }}>
+    <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ width: "100%", height, display: "block" }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill={`url(#${gid})`} />
+      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Kpi({ label, value, sub, icon: Icon, spark, sparkColor }: { label: string; value: string; sub?: string; icon: IconType; spark?: number[]; sparkColor?: string }) {
+  return (
+    <div className="mc-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span className="mc-overline">{label}</span>
         <Icon size={16} style={{ color: "var(--text-body-secondary)" }} />
       </div>
       <div className="mc-num" style={{ font: "700 28px/1 var(--font-body)", color: "var(--text-heading)" }}>{value}</div>
       {sub && <div style={{ font: "500 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 6 }}>{sub}</div>}
+      {spark && spark.length > 1 && (
+        <div style={{ marginTop: 12, marginLeft: -2, marginRight: -2 }}><Sparkline data={spark} color={sparkColor || C.blue400} /></div>
+      )}
+    </div>
+  );
+}
+
+function InsightCard({ icon: Icon, tone, label, head, note }: { icon: IconType; tone: string; label: string; head: string; note: string }) {
+  return (
+    <div className="mc-card" style={{ padding: 18, display: "flex", gap: 14 }}>
+      <div style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", background: `${tone}1f`, color: tone }}>
+        <Icon size={19} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <span className="mc-overline">{label}</span>
+        <p style={{ font: "700 14px/1.3 var(--font-heading)", color: "var(--text-heading)", margin: "3px 0 5px" }}>{head}</p>
+        <p style={{ font: "400 12px/1.5 var(--font-body)", color: "var(--text-body-secondary)" }}>{note}</p>
+      </div>
     </div>
   );
 }
@@ -92,7 +119,7 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   );
 }
 
-function BarList({ rows, max, unit }: { rows: { label: string; value: number; note?: string }[]; max: number; unit?: (n: number) => string }) {
+function BarList({ rows, max }: { rows: { label: string; value: number; note?: string }[]; max: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {rows.map((r) => (
@@ -100,7 +127,7 @@ function BarList({ rows, max, unit }: { rows: { label: string; value: number; no
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, gap: 8 }}>
             <span style={{ font: "500 12px var(--font-body)", color: "var(--text-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
             <span className="mc-num" style={{ font: "600 12px var(--font-body)", color: "var(--text-heading)", flexShrink: 0 }}>
-              {unit ? unit(r.value) : r.value}{r.note && <span style={{ color: "var(--text-body-secondary)", fontWeight: 500 }}> · {r.note}</span>}
+              {r.value}{r.note && <span style={{ color: "var(--text-body-secondary)", fontWeight: 500 }}> · {r.note}</span>}
             </span>
           </div>
           <div style={{ height: 8, borderRadius: 9999, background: "var(--surface-table-header)", overflow: "hidden" }}>
@@ -121,7 +148,7 @@ function heatCell(v: number, max: number) {
 }
 
 export default function SavariAnalytics() {
-  const dark = useDark();
+  const dark = useMcDark();
   const { data, isLoading } = useQuery({ queryKey: ["savari-analytics"], queryFn: api.getSavariAnalyticsDashboard });
 
   const summary = data?.summary;
@@ -134,6 +161,7 @@ export default function SavariAnalytics() {
   const tripTypes: string[] = data?.tripTypes || [];
   const recent: any[] = data?.recent || [];
   const range = data?.dateRange;
+  const dowHour: number[][] = data?.demandHeatmap?.byDowHour || [];
 
   const axisColor = dark ? "#999" : "#808080";
   const gridColor = dark ? "#2f2f2f" : "#e6e6e6";
@@ -146,6 +174,60 @@ export default function SavariAnalytics() {
     [monthly]
   );
   const hasPartial = monthly.some((m) => m.partial);
+  const tripsSpark = useMemo(() => monthly.map((m) => m.trips), [monthly]);
+  const earnedSpark = useMemo(() => monthly.map((m) => m.earned), [monthly]);
+
+  // Auto-generated, data-driven takeaways — turns the numbers into decisions.
+  const insights = useMemo(() => {
+    if (!summary) return [];
+    const out: { icon: IconType; tone: string; label: string; head: string; note: string }[] = [];
+    const total = summary.totalTrips || 1;
+
+    if (byCity.length) {
+      const top = byCity[0];
+      const pct = Math.round((top.trips / total) * 100);
+      out.push({
+        icon: MapPin, tone: C.blue600, label: "Top market",
+        head: `${top.key.split(",")[0]} — ${pct}% of all demand`,
+        note: `${top.trips.toLocaleString("en-IN")} bookings · ${inr(top.avgPayout)} avg payout. Keep drivers positioned here.`,
+      });
+    }
+
+    const volLeader = byTripType[0];
+    const valLeader = [...byTripType].filter((t) => t.trips >= 5).sort((a, b) => b.avgPayout - a.avgPayout)[0];
+    if (valLeader && volLeader) {
+      const mult = volLeader.avgPayout ? valLeader.avgPayout / volLeader.avgPayout : 1;
+      out.push({
+        icon: TrendingUp, tone: C.teal, label: "Best value",
+        head: `${valLeader.key} pays ${inr(valLeader.avgPayout)}/trip`,
+        note: mult >= 1.15
+          ? `${mult.toFixed(1)}× the ${volLeader.key} average — prioritise bidding on these.`
+          : `Highest avg payout with real volume — worth chasing.`,
+      });
+    }
+
+    const notPaid = byPayment.find((p) => /not/i.test(p.status));
+    if (notPaid) {
+      const pct = Math.round((notPaid.trips / total) * 100);
+      out.push({
+        icon: AlertTriangle, tone: C.amber, label: "Cash-flow risk",
+        head: `${pct}% of bookings are “Not Paid”`,
+        note: `${notPaid.trips.toLocaleString("en-IN")} trips · ${inr(notPaid.payout)} collected on delivery. Watch exposure.`,
+      });
+    }
+    return out;
+  }, [summary, byCity, byTripType, byPayment]);
+
+  const dowHourMax = useMemo(() => {
+    let mx = 1;
+    for (const row of dowHour) for (const v of row) if (v > mx) mx = v;
+    return mx;
+  }, [dowHour]);
+  const busiestSlot = useMemo(() => {
+    let best = { d: 0, h: 0, v: -1 };
+    dowHour.forEach((row, d) => row.forEach((v, h) => { if (v > best.v) best = { d, h, v }; }));
+    return best.v > 0 ? best : null;
+  }, [dowHour]);
 
   const carTypes = useMemo(() => Object.keys(matrix), [matrix]);
   const heatMax = useMemo(() => {
@@ -171,44 +253,42 @@ export default function SavariAnalytics() {
     labelStyle: { fontFamily: "Urbanist", fontWeight: 700, color: dark ? "#f2f2f2" : "#0d0d0d" },
   };
 
-  if (isLoading) return <div className="mc dark"><LoadingSpinner label="Loading Savari analytics…" /></div>;
-  if (!data) return <div className="mc dark" style={{ padding: 48, textAlign: "center", color: "var(--text-body-secondary)" }}>No data yet.</div>;
-
   const rangeLabel =
     range?.first && range?.last
-      ? `${new Date(range.first).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – ${new Date(range.last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
-      : "";
+      ? `${new Date(range.first).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${new Date(range.last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+      : undefined;
+
+  if (isLoading || !data) {
+    return (
+      <SavariShell active="analytics" title="Booking Analytics">
+        {isLoading ? <LoadingSpinner label="Loading analytics…" /> : <div style={{ padding: 48, textAlign: "center", color: "var(--text-body-secondary)" }}>No data yet.</div>}
+      </SavariShell>
+    );
+  }
 
   return (
-    <div className={dark ? "mc dark" : "mc"} style={{ background: "var(--surface-page)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 20px 96px", display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Link to="/savari" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center", borderRadius: 9999 }} aria-label="Back">
-            <ArrowLeft size={18} />
-          </Link>
-          <div style={{ flex: 1 }}>
-            <span className="mc-overline">Savari · Vendor Intelligence</span>
-            <h1 style={{ font: "800 24px/1.1 var(--font-heading)", marginTop: 2 }}>Booking Analytics</h1>
-          </div>
-          {rangeLabel && (
-            <div style={{ textAlign: "right" }}>
-              <div className="mc-overline">Data range</div>
-              <div className="mc-num" style={{ font: "600 12px var(--font-body)", color: "var(--text-body)", marginTop: 2 }}>{rangeLabel}</div>
-            </div>
-          )}
-        </div>
-
-        {/* ── OVERVIEW ─────────────────────────────────────────── */}
+    <SavariShell active="analytics" title="Booking Analytics" subtitle={rangeLabel ? `Broadcasts captured · ${rangeLabel}` : undefined}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* OVERVIEW */}
         <SectionLabel>Overview</SectionLabel>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
-          <Kpi label="Total bookings" value={summary.totalTrips.toLocaleString("en-IN")} sub="broadcasts captured" icon={Route} />
-          <Kpi label="Total vendor payout" value={inrShort(summary.totalEarned)} sub={inr(summary.totalEarned)} icon={IndianRupee} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+          <Kpi label="Total bookings" value={summary.totalTrips.toLocaleString("en-IN")} sub="broadcasts captured" icon={Route} spark={tripsSpark} sparkColor={C.blue400} />
+          <Kpi label="Total vendor payout" value={inrShort(summary.totalEarned)} sub={inr(summary.totalEarned)} icon={IndianRupee} spark={earnedSpark} sparkColor={C.teal} />
           <Kpi label="Avg payout / trip" value={inr(summary.avgPayout)} sub="vendor take per booking" icon={Wallet} />
           <Kpi label="Avg platform cut" value={`${summary.avgSavariCutPct}%`} sub="Savari commission" icon={Percent} />
         </div>
 
-        {/* ── TRENDS ───────────────────────────────────────────── */}
+        {/* KEY INSIGHTS — auto-generated takeaways */}
+        {insights.length > 0 && (
+          <>
+            <SectionLabel>Key insights</SectionLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+              {insights.map((ins, i) => <InsightCard key={i} {...ins} />)}
+            </div>
+          </>
+        )}
+
+        {/* TRENDS */}
         <SectionLabel>Trends over time</SectionLabel>
         <Panel title="Demand & revenue by month" sub="Bookings (bars) and vendor payout (line), grouped by trip month.">
           <div style={{ height: 280 }}>
@@ -257,7 +337,7 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
 
-        {/* ── DEMAND ───────────────────────────────────────────── */}
+        {/* DEMAND */}
         <SectionLabel>Where the demand is</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
           <Panel title="Top pickup cities" sub="Booking volume by pickup city — position drivers here.">
@@ -305,7 +385,44 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
 
-        {/* ── ECONOMICS & RISK ─────────────────────────────────── */}
+        {dowHour.length > 0 && (
+          <Panel title="When demand drops" sub="Bookings by day &amp; hour (IST) — staff up before the busy windows.">
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", minWidth: 640 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 34 }} />
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <th key={h} style={{ font: "500 8px var(--font-body)", color: "var(--text-body-secondary)", padding: "0 1px 4px", textAlign: "center" }}>{h % 3 === 0 ? h : ""}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map((d, di) => (
+                    <tr key={d}>
+                      <td style={{ font: "600 10px var(--font-body)", color: "var(--text-body-secondary)", paddingRight: 8 }}>{d}</td>
+                      {(dowHour[di] || []).map((v, h) => {
+                        const cs = heatCell(v, dowHourMax);
+                        return (
+                          <td key={h} style={{ padding: 1.5 }} title={`${d} ${h}:00 IST — ${v} bookings`}>
+                            <div style={{ width: 20, height: 16, borderRadius: 3, background: cs.bg || "var(--surface-table-header)" }} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {busiestSlot && (
+              <p style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 12 }}>
+                Busiest: <b style={{ color: "var(--text-body)" }}>{DAYS[busiestSlot.d]} {busiestSlot.h}:00–{busiestSlot.h + 1}:00 IST</b> · {busiestSlot.v} bookings.
+              </p>
+            )}
+          </Panel>
+        )}
+
+        {/* ECONOMICS */}
         <SectionLabel>Economics & risk</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
           <Panel title="Trip-type economics" sub="Volume vs value. High avg payout with decent volume = best to chase.">
@@ -357,7 +474,7 @@ export default function SavariAnalytics() {
           </Panel>
         </div>
 
-        {/* ── DETAIL ───────────────────────────────────────────── */}
+        {/* DETAIL */}
         <SectionLabel>Detail</SectionLabel>
         <Panel title="Recent bookings" sub="Latest 50 broadcasts captured from the Savari feed.">
           <div style={{ overflowX: "auto" }}>
@@ -392,6 +509,6 @@ export default function SavariAnalytics() {
           </div>
         </Panel>
       </div>
-    </div>
+    </SavariShell>
   );
 }
