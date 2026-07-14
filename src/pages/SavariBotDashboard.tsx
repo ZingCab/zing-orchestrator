@@ -53,6 +53,8 @@ export default function SavariBotDashboard() {
   const [newMinCost, setNewMinCost] = useState("");
   const [dirty, setDirty] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
+  const [ntfyTopicInput, setNtfyTopicInput] = useState("");
+  const [healthchecksUrlInput, setHealthchecksUrlInput] = useState("");
   const [savingToken, setSavingToken] = useState(false);
 
   const botQuery = useQuery({
@@ -70,6 +72,8 @@ export default function SavariBotDashboard() {
       setToggles(ui.toggles); setRoutesOut(ui.routesOut); setRoutesIn(ui.routesIn);
       setRoundTrip(ui.roundTrip); setRental(ui.rental); setBotConfig(ui.botConfig); setVendorLocation(ui.vendorLocation);
       setTokenInput(String((botQuery.data.config as any).savaariVendorToken || ""));
+      setNtfyTopicInput(String((botQuery.data.config as any).ntfyTopic || ""));
+      setHealthchecksUrlInput(String((botQuery.data.config as any).healthchecksUrl || ""));
     } catch (e) {
       toast({ title: "Could not load bot config", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
@@ -78,12 +82,16 @@ export default function SavariBotDashboard() {
   const saveToken = async () => {
     setSavingToken(true);
     try {
-      await api.putSavariBotToken(queryVendorId, tokenInput.trim());
+      await api.putSavariBotToken(queryVendorId, {
+        token: tokenInput.trim(),
+        ntfyTopic: ntfyTopicInput.trim(),
+        healthchecksUrl: healthchecksUrlInput.trim(),
+      });
       const ts = new Date().toLocaleTimeString("en-IN", { hour12: false });
-      setActivityLog((prev) => [`[${ts}] Savaari token updated`, ...prev].slice(0, 50));
-      toast({ title: "Token saved", description: "Feed will use the new token within ~1 min." });
+      setActivityLog((prev) => [`[${ts}] Token & alert settings updated`, ...prev].slice(0, 50));
+      toast({ title: "Saved", description: "Feed/alerts will use the new settings within ~1 min." });
     } catch (e) {
-      toast({ title: "Token save failed", description: e instanceof ApiError ? e.message : String(e), variant: "destructive" });
+      toast({ title: "Save failed", description: e instanceof ApiError ? e.message : String(e), variant: "destructive" });
     } finally {
       setSavingToken(false);
     }
@@ -313,23 +321,42 @@ export default function SavariBotDashboard() {
               <TextField label="Car types (comma separated)" value={botConfig.carTypes} onChange={(v) => { setBotConfig((s) => ({ ...s, carTypes: v })); markDirty(); }} />
             </div>
 
-            {/* Savaari vendor token — separate save (rotating credential) */}
+            {/* Secrets & alerts — saved separately from the rules above (each is its
+                own DB column, not part of the /config RPC) so refreshing a rotating
+                credential never needs a redeploy. */}
             <div style={{ marginTop: 16, borderTop: "1px solid var(--stroke-primary)", paddingTop: 16 }}>
-              <label style={{ display: "block" }}>
+              <h3 style={{ font: "700 13px var(--font-heading)", color: "var(--text-heading)", marginBottom: 10 }}>Secrets &amp; alerts</h3>
+
+              <label style={{ display: "block", marginBottom: 12 }}>
                 <span className="mc-overline" style={{ display: "block", marginBottom: 6 }}>Savaari vendor token</span>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Input type="password" placeholder="Paste current vendorToken from vendor.savaari.com"
-                    value={tokenInput} onChange={(e) => setTokenInput(e.target.value)}
-                    style={{ ...INPUT_STYLE, flex: 1, minWidth: 200 }} />
-                  <button className="mc-btn mc-btn-primary" onClick={saveToken} disabled={savingToken}>
-                    {savingToken ? "Saving…" : "Update token"}
-                  </button>
-                </div>
+                <Input type="password" placeholder="Paste current vendorToken from vendor.savaari.com"
+                  value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} style={INPUT_STYLE} />
+                <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 4 }}>
+                  Rotating credential — if the feed goes empty, paste the current token here. No redeploy needed.
+                </p>
               </label>
-              <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
-                Rotating credential — if the feed goes empty, copy the current vendorToken from a logged-in Savaari
-                session and update it here. No redeploy needed; the feed picks it up within ~1 min.
-              </p>
+
+              <label style={{ display: "block", marginBottom: 12 }}>
+                <span className="mc-overline" style={{ display: "block", marginBottom: 6 }}>ntfy topic (phone alerts)</span>
+                <Input placeholder="e.g. zingcab-savari-alerts-x7q2"
+                  value={ntfyTopicInput} onChange={(e) => setNtfyTopicInput(e.target.value)} style={INPUT_STYLE} />
+                <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 4 }}>
+                  Install the ntfy app and subscribe to this topic to get bid / dispatch / feed-trouble alerts on your phone.
+                </p>
+              </label>
+
+              <label style={{ display: "block", marginBottom: 12 }}>
+                <span className="mc-overline" style={{ display: "block", marginBottom: 6 }}>healthchecks.io ping URL</span>
+                <Input placeholder="https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={healthchecksUrlInput} onChange={(e) => setHealthchecksUrlInput(e.target.value)} style={INPUT_STYLE} />
+                <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 4 }}>
+                  A free healthchecks.io check pinged every poll — a missed ping alerts you the bot itself has stopped.
+                </p>
+              </label>
+
+              <button className="mc-btn mc-btn-primary" onClick={saveToken} disabled={savingToken}>
+                {savingToken ? "Saving…" : "Save secrets & alerts"}
+              </button>
             </div>
             {footer}
           </div>

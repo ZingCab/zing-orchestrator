@@ -101,24 +101,35 @@ router.put("/config", validate(putSchema), async (req, res, next) => {
 });
 
 /**
- * PUT /api/savari-bot/token — update just the Savaari vendorToken for a vendor.
- * Kept separate from /config (which goes through an RPC) so refreshing the
- * rotating token is a one-field, no-redeploy operation.
- * Body: { vendor_id, token }
+ * PUT /api/savari-bot/token — update the rotating Savaari vendorToken and/or
+ * the alert config (ntfy topic, healthchecks ping URL) for a vendor. Kept
+ * separate from /config (which goes through an RPC) so these are a
+ * one-field, no-redeploy operation. Each field updates only if present in
+ * the body, so the token can be refreshed without touching alert config
+ * and vice versa.
+ * Body: { vendor_id, token?, ntfy_topic?, healthchecks_url? }
  */
 router.put("/token", async (req, res, next) => {
   try {
     const vendorId = String(req.body?.vendor_id ?? "").trim();
-    const token = String(req.body?.token ?? "").trim();
     if (!vendorId) throw new AppError("vendor_id is required", 400);
+
+    const update = {};
+    if ("token" in req.body) update.savaari_vendor_token = String(req.body.token ?? "").trim() || null;
+    if ("ntfy_topic" in req.body) update.ntfy_topic = String(req.body.ntfy_topic ?? "").trim() || null;
+    if ("healthchecks_url" in req.body) update.healthchecks_url = String(req.body.healthchecks_url ?? "").trim() || null;
+
+    if (Object.keys(update).length === 0) {
+      return res.json({ success: true, data: { ok: true } });
+    }
 
     const { error } = await supabase
       .from("savari_bot_config")
-      .update({ savaari_vendor_token: token || null })
+      .update(update)
       .eq("vendor_id", vendorId);
     if (error) throw new AppError(error.message, 500);
 
-    console.log("[savari-bot] PUT /token vendor_id=", vendorId, "len=", token.length);
+    console.log("[savari-bot] PUT /token vendor_id=", vendorId, "fields=", Object.keys(update).join(","));
     res.json({ success: true, data: { ok: true } });
   } catch (err) {
     next(err);
