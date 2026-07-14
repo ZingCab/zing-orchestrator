@@ -5,6 +5,11 @@
  * -> Config panel — no .env edit / redeploy needed. Falls back to env if the
  * DB columns are empty, and is a no-op (with a log line) if neither is set,
  * so this ships without requiring accounts to exist yet.
+ *
+ * Every call logs its outcome (config resolved, HTTP status, response body on
+ * failure) — a bad topic/URL fails silently at the network level (fetch()
+ * doesn't throw on 4xx/5xx), so without this logging a misconfiguration looks
+ * identical to "nothing happened".
  */
 
 const { supabase } = require("./supabase");
@@ -19,20 +24,36 @@ async function loadAlertConfig() {
 
   let ntfyTopic = (process.env.NTFY_TOPIC || "").trim();
   let healthchecksUrl = (process.env.HEALTHCHECKS_URL || "").trim();
+  let source = "env";
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("savari_bot_config")
       .select("ntfy_topic, healthchecks_url")
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (data?.ntfy_topic && String(data.ntfy_topic).trim()) ntfyTopic = String(data.ntfy_topic).trim();
-    if (data?.healthchecks_url && String(data.healthchecks_url).trim()) healthchecksUrl = String(data.healthchecks_url).trim();
-  } catch {
-    /* fall back to whatever env provided */
+    if (error) {
+      console.error("[notify] failed to load alert config from DB, falling back to env:", error.message);
+    } else {
+      if (data?.ntfy_topic && String(data.ntfy_topic).trim()) {
+        ntfyTopic = String(data.ntfy_topic).trim();
+        source = "db";
+      }
+      if (data?.healthchecks_url && String(data.healthchecks_url).trim()) {
+        healthchecksUrl = String(data.healthchecks_url).trim();
+        source = "db";
+      }
+    }
+  } catch (e) {
+    console.error("[notify] alert config lookup threw, falling back to env:", e?.message || e);
   }
 
   _configCache = { at: now, ntfyTopic, healthchecksUrl };
+  console.log("[notify] alert config resolved", {
+    source,
+    ntfy_topic: ntfyTopic || "(none)",
+    healthchecks_url: healthchecksUrl ? `${healthchecksUrl.slice(0, 28)}…` : "(none)",
+  });
   return _configCache;
 }
 
@@ -42,8 +63,9 @@ async function sendNtfy({ title, message, priority = "high", tags = [] }) {
     console.warn("[notify] no ntfy topic configured (Bot -> Config, or NTFY_TOPIC env) — skipping push:", title);
     return;
   }
+  const url = `${NTFY_SERVER}/${encodeURIComponent(ntfyTopic)}`;
   try {
-    await fetch(`${NTFY_SERVER}/${encodeURIComponent(ntfyTopic)}`, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -53,18 +75,33 @@ async function sendNtfy({ title, message, priority = "high", tags = [] }) {
       },
       body: message,
     });
+    const bodyText = await res.text().catch(() => "");
+    if (res.ok) {
+      console.log("[notify] ntfy push sent", { topic: ntfyTopic, title, status: res.status });
+    } else {
+      console.error("[notify] ntfy push REJECTED", { topic: ntfyTopic, title, status: res.status, body: bodyText.slice(0, 300) });
+    }
   } catch (e) {
-    console.error("[notify] ntfy send failed:", e?.message || e);
+    console.error("[notify] ntfy send failed (network error):", { topic: ntfyTopic, message: e?.message || e });
   }
 }
 
 async function pingHealthcheck(suffix = "") {
   const { healthchecksUrl } = await loadAlertConfig();
-  if (!healthchecksUrl) return;
+  if (!healthchecksUrl) {
+    console.warn("[notify] no healthchecks URL configured (Bot -> Config, or HEALTHCHECKS_URL env) — skipping ping" + (suffix ? ` (${suffix})` : ""));
+    return;
+  }
   try {
-    await fetch(`${healthchecksUrl}${suffix}`, { method: "GET" });
+    const res = await fetch(`${healthchecksUrl}${suffix}`, { method: "GET" });
+    if (res.ok) {
+      console.log("[notify] healthchecks ping ok", { suffix: suffix || "(success)", status: res.status });
+    } else {
+      const bodyText = await res.text().catch(() => "");
+      console.error("[notify] healthchecks ping REJECTED", { suffix: suffix || "(success)", status: res.status, body: bodyText.slice(0, 300) });
+    }
   } catch (e) {
-    console.error("[notify] healthchecks ping failed:", e?.message || e);
+    console.error("[notify] healthchecks ping failed (network error):", e?.message || e);
   }
 }
 
