@@ -121,6 +121,47 @@ async function fetchSavaariNewBusiness(bookingId = "0") {
 }
 
 /**
+ * Confirmed/won upcoming trips (different dataset from the broadcast feed).
+ * Vendor endpoint takes this as a POST form body, unlike getNewBusiness.
+ * @returns {Promise<object>} raw upstream JSON
+ */
+async function fetchSavaariUpcomingBookings() {
+  const base =
+    (process.env.SAVAARI_BOOKING_API_URL || "").trim() || DEFAULT_BOOKING_API;
+
+  const body = new URLSearchParams();
+  body.set("action", "getUpcomingBookings");
+  body.set("vendorToken", await getVendorToken());
+  body.set("booking_id", "");
+  body.set("start_date", "");
+  body.set("end_date", "");
+
+  const upstreamRes = await fetch(base, {
+    method: "POST",
+    headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded", ...cookieHeaders() },
+    body: body.toString(),
+  });
+
+  rememberVendorCookies(upstreamRes);
+
+  const text = await upstreamRes.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error("Savaari returned non-JSON response");
+  }
+
+  if (!upstreamRes.ok) {
+    const err = new Error(`Savaari HTTP ${upstreamRes.status}`);
+    err.status = upstreamRes.status;
+    throw err;
+  }
+
+  return json;
+}
+
+/**
  * POST interest / bid on a broadcast (REAL MONEY — same vendor session as getNewBusiness).
  * Param names follow vendor `booking.php`; if upstream rejects, capture DevTools request and align fields.
  *
@@ -199,5 +240,6 @@ module.exports = {
   SAVAARI_VENDOR_TOKEN,
   DEFAULT_BOOKING_API,
   fetchSavaariNewBusiness,
+  fetchSavaariUpcomingBookings,
   postSavaariPostInterest,
 };

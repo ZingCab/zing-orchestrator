@@ -29,6 +29,7 @@ const TRIP_COLORS: Record<string, string> = {
 const tripColor = (t: string) => TRIP_COLORS[t] || C.grey500;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ymLabel = (ym: string) => {
   const [y, m] = ym.split("-");
   return `${MONTHS[Number(m) - 1]} ${y.slice(2)}`;
@@ -160,6 +161,7 @@ export default function SavariAnalytics() {
   const tripTypes: string[] = data?.tripTypes || [];
   const recent: any[] = data?.recent || [];
   const range = data?.dateRange;
+  const dowHour: number[][] = data?.demandHeatmap?.byDowHour || [];
 
   const axisColor = dark ? "#999" : "#808080";
   const gridColor = dark ? "#2f2f2f" : "#e6e6e6";
@@ -215,6 +217,17 @@ export default function SavariAnalytics() {
     }
     return out;
   }, [summary, byCity, byTripType, byPayment]);
+
+  const dowHourMax = useMemo(() => {
+    let mx = 1;
+    for (const row of dowHour) for (const v of row) if (v > mx) mx = v;
+    return mx;
+  }, [dowHour]);
+  const busiestSlot = useMemo(() => {
+    let best = { d: 0, h: 0, v: -1 };
+    dowHour.forEach((row, d) => row.forEach((v, h) => { if (v > best.v) best = { d, h, v }; }));
+    return best.v > 0 ? best : null;
+  }, [dowHour]);
 
   const carTypes = useMemo(() => Object.keys(matrix), [matrix]);
   const heatMax = useMemo(() => {
@@ -371,6 +384,43 @@ export default function SavariAnalytics() {
             </table>
           </div>
         </Panel>
+
+        {dowHour.length > 0 && (
+          <Panel title="When demand drops" sub="Bookings by day &amp; hour (IST) — staff up before the busy windows.">
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", minWidth: 640 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 34 }} />
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <th key={h} style={{ font: "500 8px var(--font-body)", color: "var(--text-body-secondary)", padding: "0 1px 4px", textAlign: "center" }}>{h % 3 === 0 ? h : ""}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map((d, di) => (
+                    <tr key={d}>
+                      <td style={{ font: "600 10px var(--font-body)", color: "var(--text-body-secondary)", paddingRight: 8 }}>{d}</td>
+                      {(dowHour[di] || []).map((v, h) => {
+                        const cs = heatCell(v, dowHourMax);
+                        return (
+                          <td key={h} style={{ padding: 1.5 }} title={`${d} ${h}:00 IST — ${v} bookings`}>
+                            <div style={{ width: 20, height: 16, borderRadius: 3, background: cs.bg || "var(--surface-table-header)" }} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {busiestSlot && (
+              <p style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 12 }}>
+                Busiest: <b style={{ color: "var(--text-body)" }}>{DAYS[busiestSlot.d]} {busiestSlot.h}:00–{busiestSlot.h + 1}:00 IST</b> · {busiestSlot.v} bookings.
+              </p>
+            )}
+          </Panel>
+        )}
 
         {/* ECONOMICS */}
         <SectionLabel>Economics & risk</SectionLabel>

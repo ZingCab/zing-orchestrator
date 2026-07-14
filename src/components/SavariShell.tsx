@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Radio, Bot, LineChart, RefreshCw, Wallet, Bell, ShieldAlert, Zap } from "lucide-react";
+import { Radio, Bot, LineChart, RefreshCw, Wallet, Bell, ShieldAlert, Zap, Landmark } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMcDark } from "@/hooks/useMcDark";
 import "@/styles/metalcloud.css";
@@ -10,7 +10,8 @@ const NAV = [
   { to: "/savari", key: "feed", label: "Live Feed", icon: Radio },
   { to: "/savari/bot", key: "bot", label: "Bot", icon: Bot },
   { to: "/savari/analytics", key: "analytics", label: "Analytics", icon: LineChart },
-];
+  { to: "/savari/finance", key: "finance", label: "Finance", icon: Landmark },
+] as const;
 
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
@@ -21,7 +22,7 @@ export function SavariShell({
   actions,
   children,
 }: {
-  active: "feed" | "bot" | "analytics";
+  active: "feed" | "bot" | "analytics" | "finance";
   title: string;
   subtitle?: string;
   actions?: ReactNode;
