@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { IndianRupee, Route, Percent, Wallet } from "lucide-react";
+import { IndianRupee, Route, Percent, Wallet, MapPin, TrendingUp, AlertTriangle, type LucideIcon } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingState";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
@@ -37,6 +37,7 @@ const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const inrShort = (n: number) =>
   n >= 1e7 ? `₹${(n / 1e7).toFixed(2)}Cr` : n >= 1e5 ? `₹${(n / 1e5).toFixed(1)}L` : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}k` : `₹${n}`;
 
+type IconType = LucideIcon;
 type Grp = { key: string; trips: number; payout: number; avgPayout: number; avgCutPct: number };
 type Payment = { status: string; trips: number; payout: number };
 type Month = { ym: string; trips: number; earned: number; byType: Record<string, number>; partial: boolean };
@@ -51,15 +52,56 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Kpi({ label, value, sub, icon: Icon }: { label: string; value: string; sub?: string; icon: any }) {
+function Sparkline({ data, color, height = 34 }: { data: number[]; color: string; height?: number }) {
+  if (data.length < 2) return <div style={{ height }} />;
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 100;
+  const step = w / (data.length - 1);
+  const pts = data.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * (height - 4) - 2).toFixed(1)}`);
+  const area = `0,${height} ${pts.join(" ")} ${w},${height}`;
+  const gid = `sg-${color.replace(/[^a-z0-9]/gi, "")}`;
   return (
-    <div className="mc-card" style={{ padding: 20 }}>
+    <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ width: "100%", height, display: "block" }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill={`url(#${gid})`} />
+      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Kpi({ label, value, sub, icon: Icon, spark, sparkColor }: { label: string; value: string; sub?: string; icon: IconType; spark?: number[]; sparkColor?: string }) {
+  return (
+    <div className="mc-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span className="mc-overline">{label}</span>
         <Icon size={16} style={{ color: "var(--text-body-secondary)" }} />
       </div>
       <div className="mc-num" style={{ font: "700 28px/1 var(--font-body)", color: "var(--text-heading)" }}>{value}</div>
       {sub && <div style={{ font: "500 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 6 }}>{sub}</div>}
+      {spark && spark.length > 1 && (
+        <div style={{ marginTop: 12, marginLeft: -2, marginRight: -2 }}><Sparkline data={spark} color={sparkColor || C.blue400} /></div>
+      )}
+    </div>
+  );
+}
+
+function InsightCard({ icon: Icon, tone, label, head, note }: { icon: IconType; tone: string; label: string; head: string; note: string }) {
+  return (
+    <div className="mc-card" style={{ padding: 18, display: "flex", gap: 14 }}>
+      <div style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", background: `${tone}1f`, color: tone }}>
+        <Icon size={19} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <span className="mc-overline">{label}</span>
+        <p style={{ font: "700 14px/1.3 var(--font-heading)", color: "var(--text-heading)", margin: "3px 0 5px" }}>{head}</p>
+        <p style={{ font: "400 12px/1.5 var(--font-body)", color: "var(--text-body-secondary)" }}>{note}</p>
+      </div>
     </div>
   );
 }
@@ -130,6 +172,49 @@ export default function SavariAnalytics() {
     [monthly]
   );
   const hasPartial = monthly.some((m) => m.partial);
+  const tripsSpark = useMemo(() => monthly.map((m) => m.trips), [monthly]);
+  const earnedSpark = useMemo(() => monthly.map((m) => m.earned), [monthly]);
+
+  // Auto-generated, data-driven takeaways — turns the numbers into decisions.
+  const insights = useMemo(() => {
+    if (!summary) return [];
+    const out: { icon: IconType; tone: string; label: string; head: string; note: string }[] = [];
+    const total = summary.totalTrips || 1;
+
+    if (byCity.length) {
+      const top = byCity[0];
+      const pct = Math.round((top.trips / total) * 100);
+      out.push({
+        icon: MapPin, tone: C.blue600, label: "Top market",
+        head: `${top.key.split(",")[0]} — ${pct}% of all demand`,
+        note: `${top.trips.toLocaleString("en-IN")} bookings · ${inr(top.avgPayout)} avg payout. Keep drivers positioned here.`,
+      });
+    }
+
+    const volLeader = byTripType[0];
+    const valLeader = [...byTripType].filter((t) => t.trips >= 5).sort((a, b) => b.avgPayout - a.avgPayout)[0];
+    if (valLeader && volLeader) {
+      const mult = volLeader.avgPayout ? valLeader.avgPayout / volLeader.avgPayout : 1;
+      out.push({
+        icon: TrendingUp, tone: C.teal, label: "Best value",
+        head: `${valLeader.key} pays ${inr(valLeader.avgPayout)}/trip`,
+        note: mult >= 1.15
+          ? `${mult.toFixed(1)}× the ${volLeader.key} average — prioritise bidding on these.`
+          : `Highest avg payout with real volume — worth chasing.`,
+      });
+    }
+
+    const notPaid = byPayment.find((p) => /not/i.test(p.status));
+    if (notPaid) {
+      const pct = Math.round((notPaid.trips / total) * 100);
+      out.push({
+        icon: AlertTriangle, tone: C.amber, label: "Cash-flow risk",
+        head: `${pct}% of bookings are “Not Paid”`,
+        note: `${notPaid.trips.toLocaleString("en-IN")} trips · ${inr(notPaid.payout)} collected on delivery. Watch exposure.`,
+      });
+    }
+    return out;
+  }, [summary, byCity, byTripType, byPayment]);
 
   const carTypes = useMemo(() => Object.keys(matrix), [matrix]);
   const heatMax = useMemo(() => {
@@ -173,12 +258,22 @@ export default function SavariAnalytics() {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* OVERVIEW */}
         <SectionLabel>Overview</SectionLabel>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
-          <Kpi label="Total bookings" value={summary.totalTrips.toLocaleString("en-IN")} sub="broadcasts captured" icon={Route} />
-          <Kpi label="Total vendor payout" value={inrShort(summary.totalEarned)} sub={inr(summary.totalEarned)} icon={IndianRupee} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+          <Kpi label="Total bookings" value={summary.totalTrips.toLocaleString("en-IN")} sub="broadcasts captured" icon={Route} spark={tripsSpark} sparkColor={C.blue400} />
+          <Kpi label="Total vendor payout" value={inrShort(summary.totalEarned)} sub={inr(summary.totalEarned)} icon={IndianRupee} spark={earnedSpark} sparkColor={C.teal} />
           <Kpi label="Avg payout / trip" value={inr(summary.avgPayout)} sub="vendor take per booking" icon={Wallet} />
           <Kpi label="Avg platform cut" value={`${summary.avgSavariCutPct}%`} sub="Savari commission" icon={Percent} />
         </div>
+
+        {/* KEY INSIGHTS — auto-generated takeaways */}
+        {insights.length > 0 && (
+          <>
+            <SectionLabel>Key insights</SectionLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+              {insights.map((ins, i) => <InsightCard key={i} {...ins} />)}
+            </div>
+          </>
+        )}
 
         {/* TRENDS */}
         <SectionLabel>Trends over time</SectionLabel>

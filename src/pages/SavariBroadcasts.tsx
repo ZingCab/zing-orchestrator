@@ -93,7 +93,8 @@ export default function SavariBroadcastsPage() {
     const totalEarn = filtered.reduce((s, p) => s + p.vendorCost, 0);
     const prepaidN = filtered.filter((p) => p.isPrepaid).length;
     const avg = listAvgRpKm(filtered);
-    return { totalEarn, prepaidN, avg };
+    const expiring = filtered.filter((p) => Number.isFinite(p.hoursLeft) && p.hoursLeft < 2).length;
+    return { totalEarn, prepaidN, avg, expiring };
   }, [filtered]);
 
   const groups = useMemo(() => buildBookingGroups(parsedAll), [parsedAll]);
@@ -112,14 +113,15 @@ export default function SavariBroadcastsPage() {
 
   return (
     <SavariShell active="feed" title="Live Feed" subtitle={subtitle}>
-      <div style={{ maxWidth: 620, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {ready && (
           <>
             {/* Stats strip */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-              <MiniStat label="Total earn" value={formatCurrency(stats.totalEarn)} tone="var(--blue-600)" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+              <MiniStat label="Potential earn" value={formatCurrency(stats.totalEarn)} tone="var(--blue-600)" />
               <MiniStat label="Pre-paid" value={`${stats.prepaidN}/${filtered.length}`} tone="var(--teal-600)" />
               <MiniStat label="Avg ₹/km" value={stats.avg.toFixed(1)} tone="var(--yellow-600)" />
+              <MiniStat label="Expiring < 2h" value={String(stats.expiring)} tone={stats.expiring > 0 ? "var(--red-600)" : "var(--text-body-secondary)"} />
             </div>
 
             {/* Sort */}
@@ -183,19 +185,20 @@ export default function SavariBroadcastsPage() {
         )}
 
         {ready && tab === "solo" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {sorted.length === 0 && (
-              <EmptyState title="No matches" subtitle="Try changing or clearing filters."
-                icon={<RefreshCw className="mx-auto h-8 w-8 text-muted-foreground/40" />} />
-            )}
-            {sorted.map((p, i) => (
-              <BookingCard key={`${p.bookingId}-${i}`} p={p} onOpenDetail={() => openDetail(p)} onAccept={() => onAccept(p)} />
-            ))}
-          </div>
+          sorted.length === 0 ? (
+            <EmptyState title="No matches" subtitle="Try changing or clearing filters."
+              icon={<RefreshCw className="mx-auto h-8 w-8 text-muted-foreground/40" />} />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
+              {sorted.map((p, i) => (
+                <BookingCard key={`${p.bookingId}-${i}`} p={p} onOpenDetail={() => openDetail(p)} onAccept={() => onAccept(p)} />
+              ))}
+            </div>
+          )
         )}
 
         {ready && tab === "groups" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
             {groups.length === 0 ? (
               <div className="mc-card" style={{ padding: 16 }}>
                 <p style={{ font: "700 14px var(--font-heading)", marginBottom: 6 }}>No route groups yet</p>

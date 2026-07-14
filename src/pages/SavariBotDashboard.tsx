@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TrendingUp, Scan, Filter, Route, X } from "lucide-react";
+import { Route, X, Car, Timer, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
@@ -123,6 +123,8 @@ export default function SavariBotDashboard() {
   const mm = Math.floor(nextRunSec / 60);
   const ss = nextRunSec % 60;
   const timerLabel = cycleSec <= 0 ? "—" : `${mm}:${ss.toString().padStart(2, "0")}`;
+  const progressPct = cycleSec <= 0 ? 0 : Math.round(((cycleSec - nextRunSec) / cycleSec) * 100);
+  const carsCount = botConfig.carTypes.split(",").map((s) => s.trim()).filter(Boolean).length;
 
   const activeRoutes = direction === "kolkata_out" ? routesOut : routesIn;
   const setActiveRoutes = direction === "kolkata_out" ? setRoutesOut : setRoutesIn;
@@ -181,12 +183,30 @@ export default function SavariBotDashboard() {
           <Banner tone="warn">No config row for vendor {queryVendorId}. Run seed_savari_bot.sql in Supabase.</Banner>
         )}
 
-        {/* KPIs */}
+        {/* Status hero */}
+        <div className="mc-card" style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)", boxShadow: running ? "0 0 0 4px rgba(43,162,76,.18)" : "none" }} />
+              <h2 style={{ font: "800 19px/1 var(--font-heading)", color: "var(--text-heading)" }}>{running ? "Bot is running" : "Bot is paused"}</h2>
+            </div>
+            <p style={{ font: "400 13px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
+              {cycleSec > 0 ? <>Polling every <b style={{ color: "var(--text-body)" }}>{cycleSec}s</b></> : "Polling paused"} · watching{" "}
+              <b style={{ color: "var(--text-body)" }}>{routesActiveKpi}</b> routes · <b style={{ color: "var(--text-body)" }}>{activeCount}/4</b> trip types enabled.
+            </p>
+            <p style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 4 }}>
+              Matches are logged to the activity feed below.
+            </p>
+          </div>
+          <ProgressRing pct={progressPct} label={timerLabel} sublabel="next run" />
+        </div>
+
+        {/* Config-derived KPIs (real, not placeholders) */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-          <Kpi icon={<TrendingUp size={16} />} label="Bids today" value={0} hint="not stored yet" tone="var(--blue-600)" />
-          <Kpi icon={<Scan size={16} />} label="Scanned" value={0} hint="not stored yet" tone="var(--teal-600)" />
-          <Kpi icon={<Filter size={16} />} label="Filtered out" value={0} hint="not stored yet" tone="var(--yellow-600)" />
+          <Kpi icon={<Layers size={16} />} label="Trip types on" value={`${activeCount}/4`} hint="enabled for bidding" tone="var(--blue-600)" />
           <Kpi icon={<Route size={16} />} label="Routes active" value={routesActiveKpi} hint="both directions" tone="var(--purple-600)" />
+          <Kpi icon={<Timer size={16} />} label="Poll interval" value={cycleSec > 0 ? `${cycleSec}s` : "—"} hint="feed scan cadence" tone="var(--teal-600)" />
+          <Kpi icon={<Car size={16} />} label="Fleet car types" value={carsCount} hint="from config" tone="var(--yellow-600)" />
         </div>
 
         {/* Trip toggles */}
@@ -339,13 +359,34 @@ function Banner({ tone, children }: { tone: "info" | "error" | "warn"; children:
   return <p style={{ borderRadius: 12, padding: "8px 12px", font: "500 12px var(--font-body)", background: map.bg, color: map.color }}>{children}</p>;
 }
 
-function Kpi({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: number; hint: string; tone: string }) {
+function Kpi({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: string | number; hint: string; tone: string }) {
   return (
     <div className="mc-card" style={{ padding: 14 }}>
       <div style={{ color: tone, marginBottom: 6 }}>{icon}</div>
       <p className="mc-overline">{label}</p>
       <p className="mc-num" style={{ font: "700 22px/1 var(--font-body)", color: "var(--text-heading)", marginTop: 4 }}>{value}</p>
       <p style={{ font: "400 10px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 2 }}>{hint}</p>
+    </div>
+  );
+}
+
+function ProgressRing({ pct, label, sublabel }: { pct: number; label: string; sublabel: string }) {
+  const size = 92, stroke = 7, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-table-header)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--blue-600)" strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - clamped / 100)} strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 300ms ease-out" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" }}>
+        <div>
+          <div className="mc-num" style={{ font: "700 17px/1 var(--font-body)", color: "var(--text-heading)" }}>{label}</div>
+          <div className="mc-overline" style={{ marginTop: 3 }}>{sublabel}</div>
+        </div>
+      </div>
     </div>
   );
 }
