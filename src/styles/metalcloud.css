@@ -129,6 +129,54 @@
 .mc-btn-ghost { background: transparent; border:1px solid var(--stroke-primary); color: var(--text-body); }
 .mc-btn-ghost:hover { background: var(--surface-hover); border-color: var(--stroke-hover); }
 
+/* ── Savari Ops app shell (responsive) ─────────────────────────────────── */
+.sv-shell { display:flex; min-height:100vh; background:var(--surface-page); color:var(--text-body); }
+.sv-sidebar {
+  width:248px; flex-shrink:0; position:sticky; top:0; height:100vh;
+  border-right:1px solid var(--stroke-primary); padding:20px 14px;
+  display:flex; flex-direction:column; gap:4px; background:var(--surface-card);
+}
+.sv-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.sv-topbar {
+  position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px;
+  padding:14px 24px; border-bottom:1px solid var(--stroke-primary);
+  background:var(--surface-page); backdrop-filter:saturate(140%) blur(8px);
+}
+.sv-content { width:100%; max-width:1200px; margin:0 auto; padding:24px; }
+.sv-bottomnav { display:none; }
+
+.sv-navitem {
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px;
+  font:600 13px var(--font-heading); color:var(--text-body-secondary);
+  text-decoration:none; transition:background 160ms ease-out, color 160ms ease-out;
+}
+.sv-navitem:hover { background:var(--surface-hover); color:var(--text-body); }
+.sv-navitem[data-active="true"] { background:var(--chip-info-bg); color:var(--chip-info-fg); }
+
+.sv-statuschip {
+  display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
+  border-radius:9999px; background:var(--surface-table-header);
+  font:600 12px var(--font-body); white-space:nowrap;
+}
+
+@media (max-width: 900px) {
+  .sv-sidebar { display:none; }
+  .sv-content { padding:16px 14px 92px; }
+  .sv-topbar { padding:12px 14px; }
+  .sv-bottomnav {
+    display:flex; position:fixed; bottom:0; left:0; right:0; z-index:30;
+    border-top:1px solid var(--stroke-primary); background:var(--surface-card);
+    padding-bottom:env(safe-area-inset-bottom, 0);
+  }
+  .sv-bottomnav a {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:9px 0 8px; font:600 10px var(--font-heading);
+    color:var(--text-body-secondary); text-decoration:none;
+  }
+  .sv-bottomnav a[data-active="true"] { color:var(--blue-500); }
+  .sv-topbar-status { display:none; }   /* balance/alerts move into content on mobile */
+}
+
 /* Segmented control */
 .mc-seg { display:inline-flex; padding:3px; gap:2px; border-radius: var(--radius-pill); background: var(--surface-table-header); }
 .mc-seg button {

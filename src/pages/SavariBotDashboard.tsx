@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { ArrowLeft, BarChart3, ChevronDown, TrendingUp, Scan, Filter, Route, X } from "lucide-react";
+import { Route, X, Car, Timer, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { applySnapshot, buildSavariPutBody, countEnabledRoutes } from "@/lib/savariBotMapping";
 import type { OutstationRoute, RouteDirection, TripToggleId } from "@/data/savariBotDummy";
-import "@/styles/metalcloud.css";
+import { SavariShell } from "@/components/SavariShell";
 
 const DEFAULT_VENDOR_ID = import.meta.env.VITE_SAVARI_VENDOR_ID || "262882";
 
@@ -32,22 +31,7 @@ const INPUT_STYLE: React.CSSProperties = {
   borderColor: "var(--stroke-primary)", background: "var(--surface-page)", color: "var(--text-body)",
 };
 
-// Savari section defaults to dark. Still reacts if the app ever sets `light`.
-function useDark() {
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const el = document.documentElement;
-    const compute = () => setDark(!el.classList.contains("light"));
-    compute();
-    const obs = new MutationObserver(compute);
-    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
-
 export default function SavariBotDashboard() {
-  const dark = useDark();
   const queryClient = useQueryClient();
   const [queryVendorId, setQueryVendorId] = useState(DEFAULT_VENDOR_ID);
 
@@ -140,6 +124,7 @@ export default function SavariBotDashboard() {
   const ss = nextRunSec % 60;
   const timerLabel = cycleSec <= 0 ? "—" : `${mm}:${ss.toString().padStart(2, "0")}`;
   const progressPct = cycleSec <= 0 ? 0 : Math.round(((cycleSec - nextRunSec) / cycleSec) * 100);
+  const carsCount = botConfig.carTypes.split(",").map((s) => s.trim()).filter(Boolean).length;
 
   const activeRoutes = direction === "kolkata_out" ? routesOut : routesIn;
   const setActiveRoutes = direction === "kolkata_out" ? setRoutesOut : setRoutesIn;
@@ -173,9 +158,22 @@ export default function SavariBotDashboard() {
 
   const footer = <ConfigFooter dirty={dirty} onReset={resetFromServer} onSave={saveToServer} saving={saveMutation.isPending} />;
 
+  const actions = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ textAlign: "right" }}>
+        <div className="mc-overline">Next run</div>
+        <div className="mc-num" style={{ font: "700 14px var(--font-body)", color: "var(--text-heading)" }}>{timerLabel}</div>
+      </div>
+      <span className="mc-chip" style={{ background: running ? "var(--chip-success-bg)" : "var(--surface-table-header)", color: running ? "var(--chip-success-fg)" : "var(--text-body-secondary)" }}>
+        <span style={{ width: 6, height: 6, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)" }} />
+        {running ? "Running" : "Stopped"}
+      </span>
+    </div>
+  );
+
   return (
-    <div className={dark ? "mc dark" : "mc"} style={{ background: "var(--surface-page)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "20px 16px 40px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <SavariShell active="bot" title="Booking Bot" subtitle={`Vendor ${botConfig.vendorId || "—"} · ${vendorLocation || "—"}`} actions={actions}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Status banners */}
         {botQuery.isLoading && <Banner tone="info">Loading bot config from API…</Banner>}
         {botQuery.isError && (
@@ -185,42 +183,30 @@ export default function SavariBotDashboard() {
           <Banner tone="warn">No config row for vendor {queryVendorId}. Run seed_savari_bot.sql in Supabase.</Banner>
         )}
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <Link to="/savari" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center" }} aria-label="Back"><ArrowLeft size={18} /></Link>
-            <Link to="/savari/analytics" className="mc-btn mc-btn-ghost" style={{ width: 40, padding: 0, justifyContent: "center" }} aria-label="Analytics"><BarChart3 size={16} /></Link>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ width: 44, height: 44, borderRadius: 9999, background: "var(--surface-action)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                <TrendingUp size={20} color="#fff" />
-              </div>
-              <div>
-                <h1 style={{ font: "800 18px/1.1 var(--font-heading)" }}>Savaari Booking Bot</h1>
-                <p className="mc-num" style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 2 }}>
-                  Vendor {botConfig.vendorId || "—"} · {vendorLocation || "—"}
-                </p>
-              </div>
+        {/* Status hero */}
+        <div className="mc-card" style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)", boxShadow: running ? "0 0 0 4px rgba(43,162,76,.18)" : "none" }} />
+              <h2 style={{ font: "800 19px/1 var(--font-heading)", color: "var(--text-heading)" }}>{running ? "Bot is running" : "Bot is paused"}</h2>
             </div>
+            <p style={{ font: "400 13px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
+              {cycleSec > 0 ? <>Polling every <b style={{ color: "var(--text-body)" }}>{cycleSec}s</b></> : "Polling paused"} · watching{" "}
+              <b style={{ color: "var(--text-body)" }}>{routesActiveKpi}</b> routes · <b style={{ color: "var(--text-body)" }}>{activeCount}/4</b> trip types enabled.
+            </p>
+            <p style={{ font: "400 11px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 4 }}>
+              Matches are logged to the activity feed below.
+            </p>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            <span className="mc-overline">Next run</span>
-            <span className="mc-num" style={{ font: "700 15px var(--font-body)", color: "var(--text-heading)" }}>{timerLabel}</span>
-            <div style={{ width: 112, height: 6, borderRadius: 9999, background: "var(--surface-table-header)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${progressPct}%`, background: "var(--blue-600)", borderRadius: 9999, transition: "width 300ms ease-out" }} />
-            </div>
-            <span className="mc-chip" style={{ background: running ? "var(--chip-success-bg)" : "var(--surface-table-header)", color: running ? "var(--chip-success-fg)" : "var(--text-body-secondary)" }}>
-              <span style={{ width: 6, height: 6, borderRadius: 9999, background: running ? "var(--green-600)" : "var(--grey-500)" }} />
-              {running ? "Running" : "Stopped"}
-            </span>
-          </div>
+          <ProgressRing pct={progressPct} label={timerLabel} sublabel="next run" />
         </div>
 
-        {/* KPIs */}
+        {/* Config-derived KPIs (real, not placeholders) */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-          <Kpi icon={<TrendingUp size={16} />} label="Bids today" value={0} hint="not stored yet" tone="var(--blue-600)" />
-          <Kpi icon={<Scan size={16} />} label="Scanned" value={0} hint="not stored yet" tone="var(--teal-600)" />
-          <Kpi icon={<Filter size={16} />} label="Filtered out" value={0} hint="not stored yet" tone="var(--yellow-600)" />
+          <Kpi icon={<Layers size={16} />} label="Trip types on" value={`${activeCount}/4`} hint="enabled for bidding" tone="var(--blue-600)" />
           <Kpi icon={<Route size={16} />} label="Routes active" value={routesActiveKpi} hint="both directions" tone="var(--purple-600)" />
+          <Kpi icon={<Timer size={16} />} label="Poll interval" value={cycleSec > 0 ? `${cycleSec}s` : "—"} hint="feed scan cadence" tone="var(--teal-600)" />
+          <Kpi icon={<Car size={16} />} label="Fleet car types" value={carsCount} hint="from config" tone="var(--yellow-600)" />
         </div>
 
         {/* Trip toggles */}
@@ -341,8 +327,8 @@ export default function SavariBotDashboard() {
                 </div>
               </label>
               <p style={{ font: "400 11px/1.6 var(--font-body)", color: "var(--text-body-secondary)", marginTop: 8 }}>
-                Rotating credential — if the feed goes empty, copy the current <code>vendorToken</code> from a logged-in
-                Savaari session and update it here. No redeploy needed; the feed picks it up within ~1 min.
+                Rotating credential — if the feed goes empty, copy the current vendorToken from a logged-in Savaari
+                session and update it here. No redeploy needed; the feed picks it up within ~1 min.
               </p>
             </div>
             {footer}
@@ -359,12 +345,8 @@ export default function SavariBotDashboard() {
             {activityLog.length === 0 ? <p style={{ color: "var(--text-body-secondary)" }}>No entries</p> : activityLog.map((line, i) => <p key={i}>{line}</p>)}
           </div>
         </div>
-
-        <p style={{ textAlign: "center", font: "400 10px var(--font-body)", color: "var(--text-body-secondary)" }}>
-          Settings load from GET /api/savari-bot/config · <Link to="/savari" style={{ color: "var(--blue-600)" }}>Back to broadcasts</Link>
-        </p>
       </div>
-    </div>
+    </SavariShell>
   );
 }
 
@@ -377,13 +359,34 @@ function Banner({ tone, children }: { tone: "info" | "error" | "warn"; children:
   return <p style={{ borderRadius: 12, padding: "8px 12px", font: "500 12px var(--font-body)", background: map.bg, color: map.color }}>{children}</p>;
 }
 
-function Kpi({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: number; hint: string; tone: string }) {
+function Kpi({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: string | number; hint: string; tone: string }) {
   return (
     <div className="mc-card" style={{ padding: 14 }}>
       <div style={{ color: tone, marginBottom: 6 }}>{icon}</div>
       <p className="mc-overline">{label}</p>
       <p className="mc-num" style={{ font: "700 22px/1 var(--font-body)", color: "var(--text-heading)", marginTop: 4 }}>{value}</p>
       <p style={{ font: "400 10px var(--font-body)", color: "var(--text-body-secondary)", marginTop: 2 }}>{hint}</p>
+    </div>
+  );
+}
+
+function ProgressRing({ pct, label, sublabel }: { pct: number; label: string; sublabel: string }) {
+  const size = 92, stroke = 7, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-table-header)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--blue-600)" strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - clamped / 100)} strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 300ms ease-out" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" }}>
+        <div>
+          <div className="mc-num" style={{ font: "700 17px/1 var(--font-body)", color: "var(--text-heading)" }}>{label}</div>
+          <div className="mc-overline" style={{ marginTop: 3 }}>{sublabel}</div>
+        </div>
+      </div>
     </div>
   );
 }

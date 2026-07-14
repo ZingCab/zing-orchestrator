@@ -9,9 +9,11 @@ require("dotenv").config();
 const { supabase } = require("../lib/supabase");
 const {
   fetchSavaariNewBusiness,
+  fetchSavaariUpcomingBookings,
   postSavaariPostInterest,
 } = require("../lib/savaariVendor");
 const { upsertBooking } = require("../lib/savariAnalytics");
+const { sendNtfy, pingHealthcheckOk, pingHealthcheckFail } = require("../lib/notify");
 
 const LOG = "[savari-bot-scheduler]";
 
@@ -21,6 +23,22 @@ const biddingEnabled =
   process.env.SAVARI_BOT_BID_ENABLED === "true";
 
 const processedBookings = new Set();
+
+// ── Alerting state ──────────────────────────────────────────────────────
+// Consecutive failed/empty ticks before we suspect the vendorToken has
+// rotated/expired (Savaari gives no explicit "invalid token" flag we can key
+// off, so this proxy is what we have — same signature as the outage we hit).
+const TOKEN_ALERT_AFTER_TICKS = 5; // ~5 poll cycles of feed trouble
+let consecutiveFetchFailures = 0;
+let consecutiveEmptyFeeds = 0;
+let tokenAlertSent = false;
+
+// Dispatch reminders (getUpcomingBookings) — polled far less often than the
+// broadcast feed since trip schedules don't change minute to minute.
+const UPCOMING_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const DISPATCH_ALERT_WINDOW_HOURS = 2;
+let lastUpcomingCheckAt = 0;
+const dispatchAlerted = new Set();
 
 // Tracks the last-upserted signature per booking so we only write to the
 // analytics DB when a booking is new or its relevant fields actually changed.
@@ -238,9 +256,68 @@ async function loadRules() {
   return { config, routeRows: routeRows || [] };
 }
 
+// Fires once when the feed has been empty or erroring for several ticks in a
+// row — the same symptom we saw when the vendorToken went stale. Not a
+// definitive "token expired" signal (Savaari doesn't give us one), but a
+// reliable proxy worth checking. Resets (and sends a recovery note) once the
+// feed is healthy again — see the reset next to consecutiveEmptyFeeds = 0.
+function checkTokenHealth(ts) {
+  const trouble = Math.max(consecutiveFetchFailures, consecutiveEmptyFeeds);
+  if (trouble >= TOKEN_ALERT_AFTER_TICKS && !tokenAlertSent) {
+    tokenAlertSent = true;
+    console.warn(LOG, ts, "[token health] feed trouble threshold hit", { trouble });
+    sendNtfy({
+      title: "🔑 Savari feed may need attention",
+      message: `${trouble} poll cycles with no bookings / errors. The vendorToken may have expired — check Bot → Config, or verify balance/KYC.`,
+      priority: "urgent",
+      tags: ["key", "rotating_light"],
+    });
+  }
+}
+
+// Checks confirmed/won trips for ones reporting soon with no driver assigned
+// yet, and pushes one alert per booking (deduped in-memory; resets on
+// restart, which just means a possible repeat alert, never a missed one).
+async function checkDispatchReminders(ts) {
+  try {
+    const json = await fetchSavaariUpcomingBookings();
+    const rs = json.resultset || json.resultSet || {};
+    const upcoming = Array.isArray(rs.UpcomingBookings) ? rs.UpcomingBookings : [];
+
+    for (const b of upcoming) {
+      const bookingId = String(b.booking_id || "");
+      if (!bookingId || dispatchAlerted.has(bookingId)) continue;
+
+      const hourDiff = Number(b.hour_diff);
+      const hasDriver = !!(b.driver_details && String(b.driver_details).trim());
+      if (hasDriver || !Number.isFinite(hourDiff) || hourDiff > DISPATCH_ALERT_WINDOW_HOURS || hourDiff < 0) {
+        continue;
+      }
+
+      dispatchAlerted.add(bookingId);
+      const route = b.iten || b.trip_itinerary || `${b.pick_city || ""}`;
+      const reportTime = b.reporting_time || b.trip_start_date_time || "soon";
+      sendNtfy({
+        title: "🚗 Dispatch needed",
+        message: `#${bookingId} ${route} reports ${reportTime} — no driver assigned yet.`,
+        priority: "high",
+        tags: ["car", "warning"],
+      });
+      console.log(LOG, ts, "[dispatch reminder]", { booking_id: bookingId, reporting_time: reportTime });
+    }
+  } catch (e) {
+    console.error(LOG, ts, "[upcoming bookings check failed]", e?.message || e);
+  }
+}
+
 async function tick() {
   const ts = new Date().toISOString();
   try {
+    if (Date.now() - lastUpcomingCheckAt >= UPCOMING_CHECK_INTERVAL_MS) {
+      lastUpcomingCheckAt = Date.now();
+      await checkDispatchReminders(ts);
+    }
+
     const { config, routeRows } = await loadRules();
     if (!config) {
       console.warn(LOG, ts, "no savari_bot_config for vendor_id=", vendorId);
@@ -271,14 +348,29 @@ async function tick() {
     });
 
     const json = await fetchSavaariNewBusiness("0");
+    consecutiveFetchFailures = 0; // the call itself succeeded (HTTP-level)
+
     const rs = json.resultset || json.resultSet || {};
     const broadcastDetails = Array.isArray(rs.broadcast_details)
       ? rs.broadcast_details
       : [];
 
     if (!broadcastDetails.length) {
-      console.log(LOG, ts, "poll ok, 0 bookings");
+      consecutiveEmptyFeeds += 1;
+      console.log(LOG, ts, "poll ok, 0 bookings", { consecutive_empty: consecutiveEmptyFeeds });
+      checkTokenHealth(ts);
+      await pingHealthcheckOk();
       return;
+    }
+    consecutiveEmptyFeeds = 0;
+    if (tokenAlertSent) {
+      tokenAlertSent = false;
+      sendNtfy({
+        title: "✅ Savari feed recovered",
+        message: "Bookings are flowing again — no action needed.",
+        priority: "default",
+        tags: ["white_check_mark"],
+      });
     }
 
     console.log(LOG, ts, `poll ok, ${broadcastDetails.length} booking(s) in feed`);
@@ -351,12 +443,24 @@ async function tick() {
               bidJson && typeof bidJson === "object" ? Object.keys(bidJson) : [],
             response_json: safeJson(bidJson),
           });
+          sendNtfy({
+            title: "🎉 Bid placed",
+            message: `#${bookingId} · ₹${vendorCost} · ${booking.pick_city || ""} · ${booking.trip_type_name || booking.trip_type || ""}`,
+            priority: "high",
+            tags: ["tada", "moneybag"],
+          });
         } catch (err) {
           console.error(LOG, ts, "[BID error]", {
             booking_id: bookingId,
             message: err?.message || String(err),
             upstream_status: err?.status || null,
             upstream_json: safeJson(err?.upstream ?? null),
+          });
+          sendNtfy({
+            title: "⚠️ Bid failed",
+            message: `#${bookingId} · ₹${vendorCost} · ${err?.message || "unknown error"}`,
+            priority: "high",
+            tags: ["warning"],
           });
         }
       }
@@ -368,8 +472,12 @@ async function tick() {
       eligible_count: eligibleCount,
       processed_bookings_size: processedBookings.size,
     });
+    await pingHealthcheckOk();
   } catch (err) {
     console.error(LOG, ts, "tick error:", err.message || err);
+    consecutiveFetchFailures += 1;
+    checkTokenHealth(ts);
+    await pingHealthcheckFail();
   }
 }
 

@@ -146,6 +146,20 @@ router.get("/dashboard", async (_req, res, next) => {
       last: createdDates[createdDates.length - 1] || null,
     };
 
+    // Demand heatmap: bookings by day-of-week x hour-of-day, in IST (fleet
+    // operates in Kolkata) — created_at is stored in UTC so we shift +5:30
+    // before bucketing, otherwise the hours would be meaningless locally.
+    const IST_OFFSET_MIN = 330;
+    const dowHourCounts = Array.from({ length: 7 }, () => Array(24).fill(0));
+    for (const r of rows) {
+      if (!r.created_at) continue;
+      const t = new Date(r.created_at).getTime();
+      if (Number.isNaN(t)) continue;
+      const ist = new Date(t + IST_OFFSET_MIN * 60000);
+      dowHourCounts[ist.getUTCDay()][ist.getUTCHours()] += 1;
+    }
+    const demandHeatmap = { timezone: "Asia/Kolkata", byDowHour: dowHourCounts };
+
     const recent = rows.slice(0, 50);
 
     const payload = {
@@ -158,6 +172,7 @@ router.get("/dashboard", async (_req, res, next) => {
       byCity,
       byPayment,
       dateRange,
+      demandHeatmap,
       recent,
     };
     cache = { at: Date.now(), payload };
